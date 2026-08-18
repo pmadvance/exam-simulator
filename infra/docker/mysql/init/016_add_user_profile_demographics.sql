@@ -1,0 +1,4 @@
+ALTER TABLE users
+  ADD COLUMN age INT NULL AFTER full_name,
+  ADD COLUMN occupation VARCHAR(120) NULL AFTER age,
+  ADD COLUMN gender VARCHAR(40) NULL AFTER occupation;
