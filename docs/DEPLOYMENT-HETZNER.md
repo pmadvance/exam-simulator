@@ -438,7 +438,7 @@ MYSQL_PASSWORD=GENERATE_A_STRONG_PASSWORD_HERE
 MYSQL_ROOT_PASSWORD=GENERATE_ANOTHER_STRONG_PASSWORD_HERE
 MYSQL_PORT=3307
 API_PORT=4000
-NEXT_PUBLIC_API_URL=https://YOUR_DOMAIN/api
+NEXT_PUBLIC_API_URL=https://YOUR_DOMAIN
 ```
 
 > **Generate strong passwords**: Run `openssl rand -base64 24` on the server.
@@ -465,7 +465,7 @@ MYSQL_PASSWORD=SAME_PASSWORD_AS_ROOT_ENV
 TOYYIBPAY_SECRET_KEY=
 TOYYIBPAY_CATEGORY_CODE=
 TOYYIBPAY_SANDBOX=true
-API_BASE_URL=https://YOUR_DOMAIN/api
+API_BASE_URL=https://YOUR_DOMAIN
 ```
 
 > **Important values to change**:
@@ -473,6 +473,7 @@ API_BASE_URL=https://YOUR_DOMAIN/api
 > - `JWT_SECRET` = generate with `openssl rand -base64 48`
 > - `COOKIE_SECURE` = **must be `true`** in production (requires HTTPS)
 > - `MYSQL_PASSWORD` = must match what you set in root `.env`
+> - `API_BASE_URL` = public site origin only. The API appends `/api/payments/callbacks/...` itself.
 
 ### 10.3 — Web .env
 
@@ -481,9 +482,11 @@ nano ~/pm/apps/web/.env
 ```
 
 ```env
-NEXT_PUBLIC_API_URL=https://YOUR_DOMAIN/api
+NEXT_PUBLIC_API_URL=https://YOUR_DOMAIN
 ```
 
+> **Important**: Use the site origin only, without `/api`. The web app already appends `/api/...` and `/uploads/...` internally.
+>
 > **Note**: `NEXT_PUBLIC_*` variables are baked into the JavaScript bundle at **build time**. If you change this value later, you must rebuild: `pnpm --filter web build`.
 
 ---
@@ -496,6 +499,8 @@ NEXT_PUBLIC_API_URL=https://YOUR_DOMAIN/api
 cd ~/pm
 docker compose -f infra/docker/docker-compose.yml --env-file .env up -d
 ```
+
+> **Security note**: The Compose file binds MySQL to `127.0.0.1:${MYSQL_PORT}` by default so the database is not exposed publicly.
 
 Wait ~30 seconds for MySQL to initialise and run the schema files, then verify:
 

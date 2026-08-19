@@ -2,6 +2,8 @@
 
 Use this when you have new code changes and want to deploy safely.
 
+For the current Exabytes production server, see `docs/EXABYTES-PRODUCTION-RUNBOOK.md` for the exact SSH command, deploy helper, backup job, and canonical domain details.
+
 ## 1) Go to project folder
 
 ```bash
