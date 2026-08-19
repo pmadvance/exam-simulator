@@ -30,6 +30,63 @@ If you need a root shell after logging in as `deploy`, elevate locally with:
 sudo -i
 ```
 
+The local `~/.ssh/config` entry should be:
+
+```sshconfig
+Host exabytes-87357858
+    HostName 45.127.7.104
+    User deploy
+    Port 8288
+```
+
+## SSH Lockout Recovery
+
+If port `8288` reports `Connection refused` and port `22` times out while the
+website is still online, the failure is before authentication: SSH is not
+listening on the documented port, or the host firewall rejects it. It is not a
+VS Code key problem.
+
+Open the Exabytes/SolusVM web console and log in as root. First inspect the
+current state:
+
+```bash
+systemctl status ssh --no-pager -l
+/usr/sbin/sshd -t
+/usr/sbin/sshd -T | grep '^port '
+ss -ltnp | grep -E ':(22|8288)\b'
+ufw status verbose
+```
+
+If `sshd -t` reports a configuration error, correct the named file and line
+before continuing. Otherwise, restore port `8288` and its firewall rule:
+
+```bash
+install -d -m 755 /etc/ssh/sshd_config.d
+printf 'Port 8288\n' > /etc/ssh/sshd_config.d/00-pmexampro-port.conf
+ufw allow 8288/tcp comment 'SSH'
+/usr/sbin/sshd -t
+systemctl restart ssh
+ss -ltnp | grep ':8288'
+ufw status verbose
+```
+
+Keep the web console open and test from a separate local terminal:
+
+```bash
+ssh -vv -p 8288 deploy@45.127.7.104
+```
+
+Only close the console after that login succeeds. If `sshd -T` still does not
+show port `8288`, inspect active directives with:
+
+```bash
+grep -RniE '^[[:space:]]*(Port|Include)[[:space:]]' \
+  /etc/ssh/sshd_config /etc/ssh/sshd_config.d
+```
+
+Remove or correct the earlier conflicting `Port` directive, rerun `sshd -t`,
+and restart `ssh`.
+
 Examples:
 
 ```bash

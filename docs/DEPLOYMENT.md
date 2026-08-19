@@ -146,24 +146,41 @@ PermitRootLogin no
 PasswordAuthentication no
 ```
 
-Save (`Ctrl+O`, `Enter`, `Ctrl+X`) and restart SSH:
+Save (`Ctrl+O`, `Enter`, `Ctrl+X`), validate the file, and reload SSH:
 
 ```bash
-sudo systemctl restart sshd
+sudo /usr/sbin/sshd -t
+sudo systemctl reload ssh
 ```
 
 > **Warning**: Before closing your current terminal, open a **new terminal tab** and test `ssh deploy@YOUR_SERVER_IP` to make sure it works. If it doesn't, you can fix it from the still-open session.
 
 ### 2.5 — Configure the firewall
 
+The production server uses SSH port `8288`. Allow that port **before** changing
+the SSH daemon configuration or enabling UFW:
+
 ```bash
-sudo ufw allow OpenSSH
+sudo ufw allow 8288/tcp comment 'SSH'
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
 
-Type `y` to confirm. This blocks all ports except SSH (22), HTTP (80), and HTTPS (443).
+Type `y` to confirm. This blocks all ports except SSH (8288), HTTP (80), and
+HTTPS (443). The `OpenSSH` UFW profile normally permits port 22 only; it does
+not automatically follow a custom `Port` value in `sshd_config`.
+
+Before ending the current SSH session, validate the configuration and confirm
+the custom port is listening:
+
+```bash
+sudo /usr/sbin/sshd -t
+sudo ss -ltnp | grep ':8288'
+sudo ufw status
+```
+
+Open a second terminal and verify `ssh -p 8288 deploy@YOUR_SERVER_IP` works.
 
 ### 2.6 — Set the timezone
 
@@ -804,7 +821,9 @@ sudo systemctl status certbot.timer
 
 ### Locked out of SSH
 
-Use the Exabytes SolusVM panel → VNC Console to log in directly and fix `/etc/ssh/sshd_config`.
+If both SSH ports are inaccessible, use the Exabytes/SolusVM panel → VNC
+Console. Log in as root (console login is separate from `PermitRootLogin`), then
+run the recovery procedure in `docs/EXABYTES-PRODUCTION-RUNBOOK.md`.
 
 ### Server runs out of disk
 
