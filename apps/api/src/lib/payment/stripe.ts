@@ -6,9 +6,16 @@ import { assertGatewayReady, getPaymentGatewaySettings } from "./settings.js";
 let stripeClient: Stripe | null = null;
 let stripeClientKey: string | null = null;
 
+export class StripeWebhookSignatureError extends Error {
+  constructor() {
+    super("Invalid Stripe webhook signature");
+    this.name = "StripeWebhookSignatureError";
+  }
+}
+
 function getStripeClient(secretKey: string) {
   if (!secretKey) {
-    throw new Error("Stripe is not configured. Set STRIPE_SECRET_KEY to enable Stripe checkout.");
+    throw new Error("Stripe is not configured. Configure the active Stripe secret key to enable checkout.");
   }
 
   if (!stripeClient || stripeClientKey !== secretKey) {
@@ -19,6 +26,16 @@ function getStripeClient(secretKey: string) {
   return stripeClient;
 }
 
+function validateStripeCredentials(settings: { sandbox: boolean; secretKey: string; webhookSecret: string }) {
+  const expectedKeyPrefix = settings.sandbox ? "sk_test_" : "sk_live_";
+  if (!settings.secretKey.startsWith(expectedKeyPrefix)) {
+    throw new Error(`Stripe ${settings.sandbox ? "sandbox" : "live"} mode requires a ${expectedKeyPrefix} secret key.`);
+  }
+  if (!settings.webhookSecret.startsWith("whsec_")) {
+    throw new Error("Stripe webhook secret must start with whsec_.");
+  }
+}
+
 function appendQuery(url: string, key: string, value: string) {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
@@ -27,11 +44,16 @@ function appendQuery(url: string, key: string, value: string) {
 export async function parseStripeWebhookEvent(rawBody: Buffer, signature: string) {
   const settings = await getPaymentGatewaySettings();
   if (!settings.stripe.webhookSecret) {
-    throw new Error("Stripe webhook secret is not configured. Set STRIPE_WEBHOOK_SECRET.");
+    throw new Error("Stripe webhook secret is not configured for the active mode.");
   }
+  validateStripeCredentials(settings.stripe);
 
   const stripe = getStripeClient(settings.stripe.secretKey);
-  return stripe.webhooks.constructEvent(rawBody, signature, settings.stripe.webhookSecret);
+  try {
+    return stripe.webhooks.constructEvent(rawBody, signature, settings.stripe.webhookSecret);
+  } catch {
+    throw new StripeWebhookSignatureError();
+  }
 }
 
 export const stripeProvider: PaymentProvider = {
@@ -39,6 +61,7 @@ export const stripeProvider: PaymentProvider = {
 
   async createBill(request: CreateBillRequest): Promise<CreateBillResult> {
     const settings = await assertGatewayReady("stripe");
+    validateStripeCredentials(settings);
     const stripe = getStripeClient(settings.secretKey);
 
     const successUrl = appendQuery(request.returnUrl, "stripe_session_id", "{CHECKOUT_SESSION_ID}");
@@ -53,6 +76,12 @@ export const stripeProvider: PaymentProvider = {
       metadata: {
         orderId: String(request.orderId),
         provider: "stripe",
+      },
+      payment_intent_data: {
+        metadata: {
+          orderId: String(request.orderId),
+          provider: "stripe",
+        },
       },
       line_items: [
         {
@@ -97,10 +126,14 @@ export const stripeProvider: PaymentProvider = {
     const eventType = String(event.type ?? "");
     let status: "paid" | "failed" | "pending" = "pending";
 
-    if (eventType === "checkout.session.completed") {
+    if (eventType === "checkout.session.completed" || eventType === "checkout.session.async_payment_succeeded") {
       const paymentStatus = String(object.payment_status ?? "");
       status = paymentStatus === "paid" ? "paid" : "pending";
-    } else if (eventType === "checkout.session.expired" || eventType === "payment_intent.payment_failed") {
+    } else if (
+      eventType === "checkout.session.expired"
+      || eventType === "checkout.session.async_payment_failed"
+      || eventType === "payment_intent.payment_failed"
+    ) {
       status = "failed";
     }
 
@@ -114,6 +147,7 @@ export const stripeProvider: PaymentProvider = {
 
   async verifyBill(billCode: string) {
     const settings = await assertGatewayReady("stripe");
+    validateStripeCredentials(settings);
     const stripe = getStripeClient(settings.secretKey);
     const session = await stripe.checkout.sessions.retrieve(billCode);
 

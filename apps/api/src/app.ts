@@ -308,6 +308,7 @@ app.use(async (request: Request, response: Response, next: NextFunction) => {
     request.path === "/api/maintenance-status" ||
     request.path.startsWith("/api/admin") ||
     request.path.startsWith("/api/auth") ||
+    request.path.startsWith("/api/payments/callbacks/") ||
     request.path.startsWith("/uploads")
   ) {
     return next();

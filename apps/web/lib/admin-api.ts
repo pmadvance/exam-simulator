@@ -292,8 +292,13 @@ export type AdminSettings = {
     };
     stripe: {
       enabled: boolean;
+      sandbox: boolean;
       secretKey: string;
       webhookSecret: string;
+      testSecretKey: string;
+      testWebhookSecret: string;
+      liveSecretKey: string;
+      liveWebhookSecret: string;
     };
     paypal: {
       enabled: boolean;
@@ -414,8 +419,13 @@ export function getAdminSettings() {
       },
       stripe: {
         enabled: false,
+        sandbox: true,
         secretKey: "",
         webhookSecret: "",
+        testSecretKey: "",
+        testWebhookSecret: "",
+        liveSecretKey: "",
+        liveWebhookSecret: "",
       },
       paypal: {
         enabled: false,

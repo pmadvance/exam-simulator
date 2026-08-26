@@ -10,7 +10,7 @@ import { checkoutSchema, guestCheckoutSchema, paymentCallbackSchema } from "../s
 import { getAuthUser, requireAuth, setSessionCookies, hashToken } from "../middleware/auth.js";
 import { signAccessToken, signRefreshToken } from "../lib/auth.js";
 import { getProvider } from "../lib/payment/index.js";
-import { parseStripeWebhookEvent } from "../lib/payment/stripe.js";
+import { parseStripeWebhookEvent, StripeWebhookSignatureError } from "../lib/payment/stripe.js";
 import { assertGatewayReady, getPaymentGatewaySettings, getPublicGatewaySettings } from "../lib/payment/settings.js";
 import { isRateLimited } from "../middleware/rate-limit.js";
 import { z } from "zod";
@@ -524,7 +524,16 @@ router.post(
         return;
       }
 
-      const event = await parseStripeWebhookEvent(rawBody, signature);
+      let event;
+      try {
+        event = await parseStripeWebhookEvent(rawBody, signature);
+      } catch (error) {
+        if (error instanceof StripeWebhookSignatureError) {
+          response.status(400).json({ message: error.message });
+          return;
+        }
+        throw error;
+      }
       const provider = getProvider("stripe");
       const result = await provider.verifyCallback(event as unknown as Record<string, unknown>);
 

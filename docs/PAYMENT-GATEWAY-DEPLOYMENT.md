@@ -59,8 +59,11 @@ TOYYIBPAY_SECRET_KEY=
 TOYYIBPAY_CATEGORY_CODE=
 TOYYIBPAY_SANDBOX=true
 
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
+STRIPE_SANDBOX=true
+STRIPE_TEST_SECRET_KEY=
+STRIPE_TEST_WEBHOOK_SECRET=
+STRIPE_LIVE_SECRET_KEY=
+STRIPE_LIVE_WEBHOOK_SECRET=
 
 PAYPAL_CLIENT_ID=
 PAYPAL_CLIENT_SECRET=
@@ -71,7 +74,7 @@ BILLPLZ_COLLECTION_ID=
 BILLPLZ_X_SIGNATURE_KEY=
 BILLPLZ_SANDBOX=true
 
-API_BASE_URL=https://YOUR_DOMAIN/api
+API_BASE_URL=https://YOUR_DOMAIN
 APP_URL=https://YOUR_DOMAIN
 ```
 
@@ -88,7 +91,14 @@ Configure these URLs in the payment-provider dashboards where webhooks/callbacks
 | PayPal | `https://YOUR_DOMAIN/api/payments/callbacks/paypal` |
 | Billplz | `https://YOUR_DOMAIN/api/payments/callbacks/billplz` |
 
-Stripe must use the webhook signing secret from the endpoint above as `STRIPE_WEBHOOK_SECRET`.
+For PM Exam Pro, the Stripe destination is
+`https://www.pmexampro.com/api/payments/callbacks/stripe`.
+
+Stripe test and live endpoints have different signing secrets. Store them as
+`STRIPE_TEST_WEBHOOK_SECRET` and `STRIPE_LIVE_WEBHOOK_SECRET`; `STRIPE_SANDBOX`
+selects the active credential pair without deleting the other one. Subscribe the
+endpoint to `checkout.session.completed`, `checkout.session.expired`,
+`checkout.session.async_payment_succeeded`, and `checkout.session.async_payment_failed`.
 
 ## Deploy Steps
 

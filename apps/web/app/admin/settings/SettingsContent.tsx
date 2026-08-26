@@ -369,41 +369,73 @@ export function SettingsContent({ initialSettings }: SettingsContentProps) {
                   </div>
 
                   <div className="mb-3">
-                    <label htmlFor="stripeSecretKey" className="form-label fw-semibold">Secret Key</label>
+                    <label htmlFor="stripeSecretKey" className="form-label fw-semibold">
+                      {paymentSettings.stripe.sandbox ? "Sandbox Secret Key" : "Live Secret Key"}
+                    </label>
                     <input
                       id="stripeSecretKey"
                       type="password"
                       className="form-control"
                       autoComplete="off"
-                      value={paymentSettings.stripe.secretKey}
+                      value={paymentSettings.stripe.sandbox ? paymentSettings.stripe.testSecretKey : paymentSettings.stripe.liveSecretKey}
                       onChange={(event) =>
                         setPaymentSettings((current) => ({
                           ...current,
-                          stripe: { ...current.stripe, secretKey: event.target.value },
+                          stripe: current.stripe.sandbox
+                            ? { ...current.stripe, secretKey: event.target.value, testSecretKey: event.target.value }
+                            : { ...current.stripe, secretKey: event.target.value, liveSecretKey: event.target.value },
                         }))
                       }
                     />
                   </div>
 
                   <div className="mb-3">
-                    <label htmlFor="stripeWebhookSecret" className="form-label fw-semibold">Webhook Secret</label>
+                    <label htmlFor="stripeWebhookSecret" className="form-label fw-semibold">
+                      {paymentSettings.stripe.sandbox ? "Sandbox Webhook Secret" : "Live Webhook Secret"}
+                    </label>
                     <input
                       id="stripeWebhookSecret"
                       type="password"
                       className="form-control"
                       autoComplete="off"
-                      value={paymentSettings.stripe.webhookSecret}
+                      value={paymentSettings.stripe.sandbox ? paymentSettings.stripe.testWebhookSecret : paymentSettings.stripe.liveWebhookSecret}
                       onChange={(event) =>
                         setPaymentSettings((current) => ({
                           ...current,
-                          stripe: { ...current.stripe, webhookSecret: event.target.value },
+                          stripe: current.stripe.sandbox
+                            ? { ...current.stripe, webhookSecret: event.target.value, testWebhookSecret: event.target.value }
+                            : { ...current.stripe, webhookSecret: event.target.value, liveWebhookSecret: event.target.value },
                         }))
                       }
                     />
                   </div>
 
+                  <div className="form-check form-switch mb-3">
+                    <input
+                      id="stripeSandbox"
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={paymentSettings.stripe.sandbox}
+                      onChange={(event) =>
+                        setPaymentSettings((current) => {
+                          const sandbox = event.target.checked;
+                          return {
+                            ...current,
+                            stripe: {
+                              ...current.stripe,
+                              sandbox,
+                              secretKey: sandbox ? current.stripe.testSecretKey : current.stripe.liveSecretKey,
+                              webhookSecret: sandbox ? current.stripe.testWebhookSecret : current.stripe.liveWebhookSecret,
+                            },
+                          };
+                        })
+                      }
+                    />
+                    <label htmlFor="stripeSandbox" className="form-check-label">Use Stripe sandbox</label>
+                  </div>
+
                   <small className="text-muted">
-                    Stripe checkout requires the secret key. The webhook secret is required for signed callback verification.
+                    Sandbox and live credentials are stored separately, so switching modes does not overwrite either pair.
                   </small>
                 </div>
               </div>

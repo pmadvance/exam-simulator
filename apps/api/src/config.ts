@@ -27,6 +27,14 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  STRIPE_SANDBOX: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((value) => value === undefined ? undefined : value === "true"),
+  STRIPE_TEST_SECRET_KEY: z.string().default(""),
+  STRIPE_TEST_WEBHOOK_SECRET: z.string().default(""),
+  STRIPE_LIVE_SECRET_KEY: z.string().default(""),
+  STRIPE_LIVE_WEBHOOK_SECRET: z.string().default(""),
   PAYPAL_CLIENT_ID: z.string().default(""),
   PAYPAL_CLIENT_SECRET: z.string().default(""),
   PAYPAL_SANDBOX: z

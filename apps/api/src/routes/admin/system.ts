@@ -325,8 +325,13 @@ const settingsSchema = z.object({
     }),
     stripe: z.object({
       enabled: z.boolean(),
+      sandbox: z.boolean(),
       secretKey: z.string().max(500),
       webhookSecret: z.string().max(500),
+      testSecretKey: z.string().max(500),
+      testWebhookSecret: z.string().max(500),
+      liveSecretKey: z.string().max(500),
+      liveWebhookSecret: z.string().max(500),
     }),
     paypal: z.object({
       enabled: z.boolean(),
@@ -402,8 +407,11 @@ router.put("/settings", async (request, response, next) => {
       ["payment.toyyibpay.categoryCode", payment.toyyibpay.categoryCode],
       ["payment.toyyibpay.sandbox", String(payment.toyyibpay.sandbox)],
       ["payment.stripe.enabled", String(payment.stripe.enabled)],
-      ["payment.stripe.secretKey", payment.stripe.secretKey],
-      ["payment.stripe.webhookSecret", payment.stripe.webhookSecret],
+      ["payment.stripe.sandbox", String(payment.stripe.sandbox)],
+      ["payment.stripe.testSecretKey", payment.stripe.testSecretKey],
+      ["payment.stripe.testWebhookSecret", payment.stripe.testWebhookSecret],
+      ["payment.stripe.liveSecretKey", payment.stripe.liveSecretKey],
+      ["payment.stripe.liveWebhookSecret", payment.stripe.liveWebhookSecret],
       ["payment.paypal.enabled", String(payment.paypal.enabled)],
       ["payment.paypal.clientId", payment.paypal.clientId],
       ["payment.paypal.clientSecret", payment.paypal.clientSecret],
@@ -424,7 +432,15 @@ router.put("/settings", async (request, response, next) => {
       );
     }
 
-    await writeAuditLog(response.locals.user.userId, "admin.settings.updated", "settings", "platform", payload);
+    await writeAuditLog(response.locals.user.userId, "admin.settings.updated", "settings", "platform", {
+      ...payload,
+      payment: payload.payment ? {
+        toyyibpay: { enabled: payload.payment.toyyibpay.enabled, sandbox: payload.payment.toyyibpay.sandbox },
+        stripe: { enabled: payload.payment.stripe.enabled, sandbox: payload.payment.stripe.sandbox },
+        paypal: { enabled: payload.payment.paypal.enabled, sandbox: payload.payment.paypal.sandbox },
+        billplz: { enabled: payload.payment.billplz.enabled, sandbox: payload.payment.billplz.sandbox },
+      } : undefined,
+    });
     response.json({
       supportEmail: payload.supportEmail ?? "support@examprep.local",
       maintenanceMode: Boolean(payload.maintenanceMode),

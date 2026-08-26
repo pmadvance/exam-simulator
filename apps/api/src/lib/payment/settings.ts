@@ -14,8 +14,13 @@ export type PaymentGatewaySettings = {
   };
   stripe: {
     enabled: boolean;
+    sandbox: boolean;
     secretKey: string;
     webhookSecret: string;
+    testSecretKey: string;
+    testWebhookSecret: string;
+    liveSecretKey: string;
+    liveWebhookSecret: string;
   };
   paypal: {
     enabled: boolean;
@@ -40,8 +45,13 @@ const PAYMENT_SETTING_KEYS = [
   "payment.toyyibpay.categoryCode",
   "payment.toyyibpay.sandbox",
   "payment.stripe.enabled",
+  "payment.stripe.sandbox",
   "payment.stripe.secretKey",
   "payment.stripe.webhookSecret",
+  "payment.stripe.testSecretKey",
+  "payment.stripe.testWebhookSecret",
+  "payment.stripe.liveSecretKey",
+  "payment.stripe.liveWebhookSecret",
   "payment.paypal.enabled",
   "payment.paypal.clientId",
   "payment.paypal.clientSecret",
@@ -56,6 +66,10 @@ const PAYMENT_SETTING_KEYS = [
 function boolFromSetting(value: string | undefined, fallback: boolean) {
   if (value === undefined || value === "") return fallback;
   return value === "true";
+}
+
+function firstNonEmpty(...values: Array<string | undefined>) {
+  return values.find((value) => Boolean(value)) ?? "";
 }
 
 async function readPaymentSettingMap() {
@@ -78,8 +92,34 @@ export async function getPaymentGatewaySettings(): Promise<PaymentGatewaySetting
 
   const toyyibpaySecretKey = map.get("payment.toyyibpay.secretKey") ?? env.TOYYIBPAY_SECRET_KEY;
   const toyyibpayCategoryCode = map.get("payment.toyyibpay.categoryCode") ?? env.TOYYIBPAY_CATEGORY_CODE;
-  const stripeSecretKey = map.get("payment.stripe.secretKey") ?? env.STRIPE_SECRET_KEY;
-  const stripeWebhookSecret = map.get("payment.stripe.webhookSecret") ?? env.STRIPE_WEBHOOK_SECRET;
+  const legacyStripeSecretKey = map.get("payment.stripe.secretKey") ?? env.STRIPE_SECRET_KEY;
+  const legacyStripeWebhookSecret = map.get("payment.stripe.webhookSecret") ?? env.STRIPE_WEBHOOK_SECRET;
+  const stripeSandbox = boolFromSetting(
+    map.get("payment.stripe.sandbox"),
+    env.STRIPE_SANDBOX ?? !legacyStripeSecretKey.startsWith("sk_live_")
+  );
+  const stripeTestSecretKey = firstNonEmpty(
+    map.get("payment.stripe.testSecretKey"),
+    env.STRIPE_TEST_SECRET_KEY,
+    legacyStripeSecretKey.startsWith("sk_test_") ? legacyStripeSecretKey : ""
+  );
+  const stripeTestWebhookSecret = firstNonEmpty(
+    map.get("payment.stripe.testWebhookSecret"),
+    env.STRIPE_TEST_WEBHOOK_SECRET,
+    legacyStripeSecretKey.startsWith("sk_test_") ? legacyStripeWebhookSecret : ""
+  );
+  const stripeLiveSecretKey = firstNonEmpty(
+    map.get("payment.stripe.liveSecretKey"),
+    env.STRIPE_LIVE_SECRET_KEY,
+    legacyStripeSecretKey.startsWith("sk_live_") ? legacyStripeSecretKey : ""
+  );
+  const stripeLiveWebhookSecret = firstNonEmpty(
+    map.get("payment.stripe.liveWebhookSecret"),
+    env.STRIPE_LIVE_WEBHOOK_SECRET,
+    legacyStripeSecretKey.startsWith("sk_live_") ? legacyStripeWebhookSecret : ""
+  );
+  const stripeSecretKey = stripeSandbox ? stripeTestSecretKey : stripeLiveSecretKey;
+  const stripeWebhookSecret = stripeSandbox ? stripeTestWebhookSecret : stripeLiveWebhookSecret;
   const paypalClientId = map.get("payment.paypal.clientId") ?? env.PAYPAL_CLIENT_ID;
   const paypalClientSecret = map.get("payment.paypal.clientSecret") ?? env.PAYPAL_CLIENT_SECRET;
   const billplzApiKey = map.get("payment.billplz.apiKey") ?? env.BILLPLZ_API_KEY;
@@ -95,8 +135,13 @@ export async function getPaymentGatewaySettings(): Promise<PaymentGatewaySetting
     },
     stripe: {
       enabled: boolFromSetting(map.get("payment.stripe.enabled"), Boolean(stripeSecretKey)),
+      sandbox: stripeSandbox,
       secretKey: stripeSecretKey,
       webhookSecret: stripeWebhookSecret,
+      testSecretKey: stripeTestSecretKey,
+      testWebhookSecret: stripeTestWebhookSecret,
+      liveSecretKey: stripeLiveSecretKey,
+      liveWebhookSecret: stripeLiveWebhookSecret,
     },
     paypal: {
       enabled: boolFromSetting(map.get("payment.paypal.enabled"), Boolean(paypalClientId && paypalClientSecret)),
@@ -122,7 +167,7 @@ export function getPublicGatewaySettings(settings: PaymentGatewaySettings): Publ
     },
     stripe: {
       enabled: settings.stripe.enabled,
-      configured: Boolean(settings.stripe.secretKey),
+      configured: Boolean(settings.stripe.secretKey && settings.stripe.webhookSecret),
     },
     paypal: {
       enabled: settings.paypal.enabled,
