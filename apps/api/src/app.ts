@@ -302,13 +302,22 @@ app.get("/api/maintenance-status", async (request, response) => {
 });
 
 app.use(async (request: Request, response: Response, next: NextFunction) => {
-  // Always allow health, admin routes, auth routes, and static files
+  const isPublicCatalogRead = request.method === "GET" && (
+    request.path === "/api/products"
+    || request.path.startsWith("/api/products/")
+    || request.path === "/api/exams"
+    || request.path.startsWith("/api/exams/")
+  );
+
+  // The web layer enforces the maintenance page. Keep read-only catalog APIs
+  // reachable so allowed visitors and server-rendered pages can load live data.
   if (
     request.path === "/health" ||
     request.path === "/api/maintenance-status" ||
     request.path.startsWith("/api/admin") ||
     request.path.startsWith("/api/auth") ||
     request.path.startsWith("/api/payments/callbacks/") ||
+    isPublicCatalogRead ||
     request.path.startsWith("/uploads")
   ) {
     return next();

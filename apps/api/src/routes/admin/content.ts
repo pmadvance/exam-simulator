@@ -144,6 +144,21 @@ router.patch("/products/:id/status", async (request, response, next) => {
 
 // ───────────── Admin Exam Preview (all questions) ─────────────
 
+router.get("/exams", async (_request, response, next) => {
+  try {
+    const [rows] = await getPool().query(
+      `SELECT exams.id, exams.product_id AS productId, exams.slug, exams.title,
+              exams.time_limit_minutes AS timeLimitMinutes,
+              exams.pass_threshold AS passThreshold,
+              (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id) AS questionCount,
+              exams.status
+       FROM exams
+       ORDER BY exams.id DESC`
+    );
+    response.json(rows);
+  } catch (error) { next(error); }
+});
+
 router.get("/exams/:id/preview-questions", async (request, response, next) => {
   try {
     const examId = Number(request.params.id);

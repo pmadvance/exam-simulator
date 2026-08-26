@@ -354,7 +354,7 @@ export function getAdminQuestions(examId?: number) {
 }
 
 export function getAdminExams() {
-  return safeFetch<AdminExam[]>("/api/exams", []);
+  return safeFetch<AdminExam[]>("/api/admin/exams", []);
 }
 
 export function getAdminUsers() {

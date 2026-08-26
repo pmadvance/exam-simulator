@@ -38,7 +38,7 @@ export default function AdminPreviewPage() {
         setQuestions([]);
       }
       try {
-        const exams = await browserApiFetch<{ id: number; title: string }[]>("/api/exams");
+        const exams = await browserApiFetch<{ id: number; title: string }[]>("/api/admin/exams");
         const exam = exams.find((e) => e.id === Number(examId));
         if (exam) setExamTitle(exam.title);
       } catch { /* ignore */ }
