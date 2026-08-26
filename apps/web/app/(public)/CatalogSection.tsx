@@ -17,6 +17,7 @@ const difficultyColor: Record<string, { bg: string; fg: string }> = {
 };
 
 export function CatalogSection({ products }: { products: ProductCard[] }) {
+  const [catalogProducts, setCatalogProducts] = useState(products);
   const [enrollments, setEnrollments] = useState<EnrollmentSummary[]>([]);
   const [activeCategory, setActiveCategory] = useState("All");
 
@@ -24,9 +25,15 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
     let cancelled = false;
     async function check() {
       try {
-        const data = await browserApiFetch<EnrollmentSummary[]>("/api/enrollments");
-        if (!cancelled && Array.isArray(data)) {
-          setEnrollments(data.filter((e) => e.status === "active" && new Date(e.expiresAt) > new Date()));
+        const [latestProducts, latestEnrollments] = await Promise.allSettled([
+          browserApiFetch<ProductCard[]>("/api/products"),
+          browserApiFetch<EnrollmentSummary[]>("/api/enrollments"),
+        ]);
+        if (!cancelled && latestProducts.status === "fulfilled" && Array.isArray(latestProducts.value)) {
+          setCatalogProducts(latestProducts.value);
+        }
+        if (!cancelled && latestEnrollments.status === "fulfilled" && Array.isArray(latestEnrollments.value)) {
+          setEnrollments(latestEnrollments.value.filter((e) => e.status === "active" && new Date(e.expiresAt) > new Date()));
         }
       } catch { /* not logged in */ }
     }
@@ -35,13 +42,13 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
   }, []);
 
   const categories = useMemo(() => {
-    const cats = Array.from(new Set(products.map((p) => p.category)));
+    const cats = Array.from(new Set(catalogProducts.map((p) => p.category)));
     return ["All", ...cats];
-  }, [products]);
+  }, [catalogProducts]);
 
   const filtered = activeCategory === "All"
-    ? products
-    : products.filter((p) => p.category === activeCategory);
+    ? catalogProducts
+    : catalogProducts.filter((p) => p.category === activeCategory);
 
   return (
     <section id="catalog" style={{ background: "#FFFFFF" }}>
@@ -110,7 +117,7 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
                         fontWeight: 400,
                       }}
                     >
-                      ({products.filter((p) => p.category === cat).length})
+                      ({catalogProducts.filter((p) => p.category === cat).length})
                     </span>
                   )}
                 </button>

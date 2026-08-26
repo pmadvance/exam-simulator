@@ -352,7 +352,9 @@ const fallbackProducts: ProductCard[] = [
 ];
 
 export function getProducts() {
-  return safeFetch("/api/products", fallbackProducts);
+  // Fixtures are useful for local development, but showing them in production
+  // when the API is unavailable makes archived products appear to be live.
+  return safeFetch("/api/products", process.env.NODE_ENV === "development" ? fallbackProducts : []);
 }
 
 export function getExam(slug: string) {

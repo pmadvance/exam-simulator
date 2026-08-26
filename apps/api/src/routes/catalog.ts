@@ -42,13 +42,22 @@ router.get("/products/:slug", async (request, response, next) => {
       return;
     }
 
+    const [visibilityRows] = await getPool().query(
+      `SELECT id FROM products WHERE id = ? AND visibility = 'published' LIMIT 1`,
+      [product.id]
+    );
+    if ((visibilityRows as Array<{ id: number }>).length === 0) {
+      response.status(404).json({ message: "Product not found" });
+      return;
+    }
+
     const [rows] = await getPool().query(
       `SELECT id, product_id AS productId, slug, title, time_limit_minutes AS timeLimitMinutes,
               pass_threshold AS passThreshold,
-              (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id) AS questionCount,
+              (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id AND questions.status = 'published') AS questionCount,
               status
        FROM exams
-       WHERE product_id = ?
+       WHERE product_id = ? AND status = 'published'
        ORDER BY id ASC`,
       [product.id]
     );
@@ -68,12 +77,15 @@ router.get("/exams", async (_request, response, next) => {
     }
 
     const [rows] = await getPool().query(
-      `SELECT id, product_id AS productId, slug, title, time_limit_minutes AS timeLimitMinutes,
-              pass_threshold AS passThreshold,
-              (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id) AS questionCount,
-              status
+      `SELECT exams.id, exams.product_id AS productId, exams.slug, exams.title,
+              exams.time_limit_minutes AS timeLimitMinutes,
+              exams.pass_threshold AS passThreshold,
+              (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id AND questions.status = 'published') AS questionCount,
+              exams.status
        FROM exams
-       ORDER BY id ASC`
+       INNER JOIN products ON products.id = exams.product_id
+       WHERE exams.status = 'published' AND products.visibility = 'published'
+       ORDER BY exams.id ASC`
     );
 
     response.json(rows);
@@ -84,6 +96,22 @@ router.get("/exams", async (_request, response, next) => {
 
 router.get("/exams/:slug", async (request, response, next) => {
   try {
+    const databaseReady = await getDatabaseReady();
+    if (databaseReady) {
+      const [publishedRows] = await getPool().query(
+        `SELECT exams.id
+         FROM exams
+         INNER JOIN products ON products.id = exams.product_id
+         WHERE exams.slug = ? AND exams.status = 'published' AND products.visibility = 'published'
+         LIMIT 1`,
+        [request.params.slug]
+      );
+      if ((publishedRows as Array<{ id: number }>).length === 0) {
+        response.status(404).json({ message: "Exam not found" });
+        return;
+      }
+    }
+
     const exam = await getExamBySlug(request.params.slug);
     if (!exam) {
       response.status(404).json({ message: "Exam not found" });

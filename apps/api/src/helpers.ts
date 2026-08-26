@@ -441,7 +441,7 @@ export async function getExamBySlug(slug: string) {
     `SELECT exams.id, exams.product_id AS productId, exams.slug, exams.title,
             exams.time_limit_minutes AS timeLimitMinutes,
             exams.pass_threshold AS passThreshold,
-            (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id) AS questionCount,
+            (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id AND questions.status = 'published') AS questionCount,
             exams.status,
             products.slug AS productSlug
      FROM exams
@@ -459,7 +459,7 @@ export async function getExamBySlug(slug: string) {
   const [questionRows] = await getPool().query(
     `SELECT id, prompt, option_a AS optionA, option_b AS optionB, option_c AS optionC, option_d AS optionD, correct_answer AS correctAnswer, explanation, image_url AS imageUrl
      FROM questions
-     WHERE exam_id = ?
+     WHERE exam_id = ? AND status = 'published'
      ORDER BY RAND()
      LIMIT 5`,
     [exam.id]
