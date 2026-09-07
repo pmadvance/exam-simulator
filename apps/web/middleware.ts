@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const INTERNAL_API_URL = process.env.INTERNAL_API_URL ?? API_URL;
 
 function isPublicAsset(pathname: string) {
   return (
@@ -80,7 +81,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/maintenance-status`, {
+    const response = await fetch(`${INTERNAL_API_URL}/api/maintenance-status`, {
       cache: "no-store",
       headers: buildClientIpHeaders(request),
     });

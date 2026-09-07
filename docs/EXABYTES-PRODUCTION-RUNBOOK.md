@@ -196,8 +196,10 @@ Use the public site origin only for these values:
 
 ```env
 NEXT_PUBLIC_API_URL=https://www.pmexampro.com
+INTERNAL_API_URL=http://127.0.0.1:4000
 APP_URL=https://www.pmexampro.com
 API_BASE_URL=https://www.pmexampro.com
 ```
 
 Do not append `/api` to `NEXT_PUBLIC_API_URL` or `API_BASE_URL` in this project. The app already appends the necessary path segments internally.
+`INTERNAL_API_URL` keeps server-side maintenance checks on the local API service instead of routing them through Cloudflare.
