@@ -2,6 +2,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
 import morgan from "morgan";
+import { performance } from "node:perf_hooks";
 import path from "path";
 import { fileURLToPath } from "url";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import catalogRouter from "./routes/catalog.js";
 import checkoutRouter from "./routes/checkout.js";
 import studentRouter from "./routes/student.js";
 import adminRouter from "./routes/admin/index.js";
+import { getRedisStatus } from "./services/redis.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOADS_DIR = path.resolve(__dirname, "../uploads");
@@ -35,6 +37,10 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
+app.use((_request, response, next) => {
+  response.locals.requestStartedAt = performance.now();
+  next();
+});
 
 // ── Session revocation gate ────────────────────────────────────
 // Access tokens are short-lived, but session revocation should be immediate
@@ -67,6 +73,7 @@ app.use(async (request: Request, response: Response, next: NextFunction) => {
       return next();
     }
 
+    const sessionCheckStartedAt = performance.now();
     const [rows] = await getPool().query<RowDataPacket[]>(
       `SELECT revoked_at AS revokedAt, expires_at AS expiresAt
        FROM auth_sessions
@@ -74,6 +81,7 @@ app.use(async (request: Request, response: Response, next: NextFunction) => {
        LIMIT 1`,
       [payload.sessionId, payload.userId]
     );
+    response.locals.sessionCheckMs = performance.now() - sessionCheckStartedAt;
     const session = rows[0];
     const expired = session && new Date(session.expiresAt as string | Date).getTime() < Date.now();
 
@@ -92,10 +100,17 @@ app.use(async (request: Request, response: Response, next: NextFunction) => {
 // ── Health check ───────────────────────────────────────────────
 app.get("/health", async (_request, response) => {
   const database = await canConnectToDatabase();
+  const redis = getRedisStatus();
   if (database) {
     await ensureDatabaseTables();
   }
-  response.json({ status: "ok", database, service: "api" });
+  const healthy = database && (!redis.required || redis.ready);
+  response.status(healthy ? 200 : 503).json({
+    status: healthy ? "ok" : "degraded",
+    database,
+    redis,
+    service: "api",
+  });
 });
 
 // ── Static files (uploaded images) ─────────────────────────────

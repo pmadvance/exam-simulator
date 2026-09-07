@@ -278,7 +278,7 @@ router.post("/checkout/apply-voucher", async (request, response, next) => {
 // ── Guest checkout: combined registration + payment ────────────
 router.post("/checkout/register-and-pay", async (request, response, next) => {
   try {
-    if (isRateLimited(request.ip ?? "unknown", "checkout", 10, 60_000)) {
+    if (await isRateLimited(request.ip ?? "unknown", "checkout", 10, 60_000)) {
       response.status(429).json({ message: "Too many requests. Please try again later." });
       return;
     }

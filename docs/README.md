@@ -14,6 +14,8 @@ Local-first MVP scaffold for a PMP/CAPM custom practice exam simulator. The work
 
 - Remote deploy runbook: [QUICK-DEPLOY-INSTRUCTIONS.md](QUICK-DEPLOY-INSTRUCTIONS.md)
 - Current Exabytes production runbook: [EXABYTES-PRODUCTION-RUNBOOK.md](EXABYTES-PRODUCTION-RUNBOOK.md)
+- Redis and two-worker rollout: [REDIS-CLUSTER-DEPLOYMENT.md](REDIS-CLUSTER-DEPLOYMENT.md)
+- Question-loading performance: [QUESTION_LOADING_PERFORMANCE.md](QUESTION_LOADING_PERFORMANCE.md)
 
 ## Prerequisites
 

@@ -23,7 +23,7 @@ const PASSWORD_REQUIREMENTS = /^(?=.*[A-Za-z])(?=.*\d).+$/;
 // ─── Send email verification code ───
 router.post("/send-verification-code", async (request, response, next) => {
   try {
-    if (isRateLimited(request.ip ?? "unknown", "auth-verify", 5, 60_000)) {
+    if (await isRateLimited(request.ip ?? "unknown", "auth-verify", 5, 60_000)) {
       response.status(429).json({ message: "Too many requests. Please try again later." });
       return;
     }
@@ -86,7 +86,7 @@ router.post("/send-verification-code", async (request, response, next) => {
 
 router.post("/register", async (request, response, next) => {
   try {
-    if (isRateLimited(request.ip ?? "unknown", "auth", 10, 60_000)) {
+    if (await isRateLimited(request.ip ?? "unknown", "auth", 10, 60_000)) {
       response.status(429).json({ message: "Too many requests. Please try again later." });
       return;
     }
@@ -182,7 +182,7 @@ router.post("/register", async (request, response, next) => {
 
 router.post("/login", async (request, response, next) => {
   try {
-    if (isRateLimited(request.ip ?? "unknown", "auth", 10, 60_000)) {
+    if (await isRateLimited(request.ip ?? "unknown", "auth", 10, 60_000)) {
       response.status(429).json({ message: "Too many requests. Please try again later." });
       return;
     }
@@ -418,7 +418,7 @@ router.get("/signout", async (request, response, next) => {
 
 router.post("/forgot-password", async (request, response, next) => {
   try {
-    if (isRateLimited(request.ip ?? "unknown", "auth-forgot", 5, 15 * 60_000)) {
+    if (await isRateLimited(request.ip ?? "unknown", "auth-forgot", 5, 15 * 60_000)) {
       response.status(429).json({ message: "Too many requests. Please try again later." });
       return;
     }

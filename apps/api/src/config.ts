@@ -18,6 +18,17 @@ const envSchema = z.object({
   MYSQL_DATABASE: z.string().default("pm_exam"),
   MYSQL_USER: z.string().default("pm_user"),
   MYSQL_PASSWORD: z.string().default("pm_password"),
+  MYSQL_CONNECTION_LIMIT: z.coerce.number().int().min(1).max(100).default(10),
+  QUESTION_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).max(86_400).default(300),
+  QUESTION_CACHE_MAX_EXAMS: z.coerce.number().int().min(1).max(1_000).default(100),
+  QUESTION_LOAD_SLOW_MS: z.coerce.number().int().min(0).default(2_000),
+  REDIS_URL: z.string().default(""),
+  REDIS_KEY_PREFIX: z.string().regex(/^[a-zA-Z0-9:_-]+$/).default("pmexampro"),
+  REDIS_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(2_000),
+  REDIS_REQUIRED: z
+    .union([z.literal("true"), z.literal("false")])
+    .default("false")
+    .transform((value) => value === "true"),
   // Payment gateway — ToyyibPay
   TOYYIBPAY_SECRET_KEY: z.string().default(""),
   TOYYIBPAY_CATEGORY_CODE: z.string().default(""),

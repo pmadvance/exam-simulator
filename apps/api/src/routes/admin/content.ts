@@ -14,6 +14,7 @@ import {
 import { attempts } from "../../store.js";
 import { UPLOADS_DIR } from "../../app.js";
 import { env } from "../../config.js";
+import { invalidatePublishedQuestions } from "../../services/question-cache.js";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -205,6 +206,7 @@ router.post("/questions", async (request, response, next) => {
       [payload.examId, payload.questionType, payload.prompt, payload.optionA, payload.optionB, payload.optionC, payload.optionD, payload.optionE ?? "", payload.correctAnswer, payload.explanation, payload.ecoDomain ?? null, payload.performanceDomain ?? null, payload.imageUrl ?? null, payload.difficulty ?? null, payload.status]
     );
     const questionId = (result as { insertId: number }).insertId;
+    invalidatePublishedQuestions(payload.examId);
     const [examRows] = await getPool().query<RowDataPacket[]>(`SELECT slug FROM exams WHERE id = ? LIMIT 1`, [payload.examId]);
     const examSlug = examRows[0]?.slug ?? "";
     await writeAuditLog(response.locals.user.userId, "admin.question.created", "question", String(questionId), { examId: payload.examId });
@@ -215,6 +217,12 @@ router.post("/questions", async (request, response, next) => {
 router.patch("/questions/:id", async (request, response, next) => {
   try {
     const payload = questionUpdateSchema.parse(request.body);
+    const [questionRows] = await getPool().query<RowDataPacket[]>(
+      `SELECT exam_id AS examId FROM questions WHERE id = ? LIMIT 1`,
+      [request.params.id]
+    );
+    const examId = Number(questionRows[0]?.examId ?? 0);
+    if (!examId) { response.status(404).json({ message: "Question not found" }); return; }
     const columnMap: Record<string, string> = { questionType: "question_type", optionA: "option_a", optionB: "option_b", optionC: "option_c", optionD: "option_d", optionE: "option_e", correctAnswer: "correct_answer", imageUrl: "image_url", ecoDomain: "eco_domain", performanceDomain: "performance_domain", difficulty: "difficulty" };
     const sets: string[] = [];
     const vals: (string | number | null)[] = [];
@@ -227,6 +235,7 @@ router.patch("/questions/:id", async (request, response, next) => {
     vals.push(Number(request.params.id));
     const [result] = await getPool().execute(`UPDATE questions SET ${sets.join(", ")} WHERE id = ?`, vals);
     if ((result as { affectedRows: number }).affectedRows === 0) { response.status(404).json({ message: "Question not found" }); return; }
+    invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.question.updated", "question", request.params.id, payload);
     response.json({ id: Number(request.params.id), ...payload });
   } catch (error) { next(error); }
@@ -234,8 +243,15 @@ router.patch("/questions/:id", async (request, response, next) => {
 
 router.delete("/questions/:id", async (request, response, next) => {
   try {
+    const [questionRows] = await getPool().query<RowDataPacket[]>(
+      `SELECT exam_id AS examId FROM questions WHERE id = ? LIMIT 1`,
+      [request.params.id]
+    );
+    const examId = Number(questionRows[0]?.examId ?? 0);
+    if (!examId) { response.status(404).json({ message: "Question not found" }); return; }
     const [result] = await getPool().execute(`DELETE FROM questions WHERE id = ?`, [request.params.id]);
     if ((result as { affectedRows: number }).affectedRows === 0) { response.status(404).json({ message: "Question not found" }); return; }
+    invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.question.deleted", "question", request.params.id, {});
     response.status(204).send();
   } catch (error) { next(error); }
@@ -395,6 +411,7 @@ router.post("/questions/upload-csv", async (request, response, next) => {
     
     console.log(`[CSV Import] Complete: ${inserted}/${parsed.records.length} inserted, ${insertErrors.length} errors`);
 
+    if (inserted > 0) invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.questions.csv-upload", "exam", String(examId), { inserted, attempted: parsed.records.length });
     response.json({ 
       inserted, 
@@ -484,6 +501,7 @@ router.post("/questions/upload-xlsx", xlsxUpload.single("file"), async (request,
       connection.release();
     }
 
+    invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.questions.xlsx-upload", "exam", examSlug, {
       sheet: firstSheetName,
       inserted,
@@ -946,6 +964,7 @@ router.post("/questions/import/apply", async (request, response, next) => {
       connection.release();
     }
 
+    invalidatePublishedQuestions(Number(batch.examId));
     await writeAuditLog(response.locals.user.userId, "admin.questions.import.apply", "exam", String(batch.examSlug), {
       importId: batch.id,
       imported: parsed.records.length,
@@ -998,6 +1017,7 @@ router.post("/questions/import", async (request, response, next) => {
       connection.release();
     }
 
+    invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.questions.import.legacy", "exam", previewPayload.examSlug, {
       imported: parsed.records.length,
       skippedRows: parsed.skippedRows
@@ -1116,6 +1136,7 @@ router.post("/questions/rollback", async (request, response, next) => {
       connection.release();
     }
 
+    invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.questions.rollback", "exam", payload.examSlug, {
       versionNo: payload.versionNo,
       restoredQuestions: versionRows.length

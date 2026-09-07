@@ -4,6 +4,8 @@ module.exports = {
       name: "pm-api",
       cwd: "./apps/api",
       script: "dist/index.js",
+      exec_mode: "cluster",
+      instances: 2,
       env: {
         NODE_ENV: "production"
       },

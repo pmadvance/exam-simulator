@@ -1,12 +1,16 @@
 import { Router } from "express";
 import crypto from "crypto";
 import type { RowDataPacket } from "mysql2";
+import type { PoolConnection } from "mysql2/promise";
+import { performance } from "node:perf_hooks";
 import { z } from "zod";
+import { env } from "../config.js";
 import { getPool } from "../db.js";
 import { sampleQuestions } from "../fixtures.js";
 import { getDatabaseReady, getExamBySlug, getProductBySlug, hasActiveEnrollment, parseJsonField, serializeAttemptRow, toIsoString, writeAuditLog } from "../helpers.js";
 import { progressSchema } from "../schemas.js";
 import { requireAuth } from "../middleware/auth.js";
+import { publicQuestionSql, publishedQuestionCache, type QuestionCacheStatus } from "../services/question-cache.js";
 import { attempts } from "../store.js";
 import type { AttemptRecord, AttemptRow } from "../types.js";
 
@@ -45,6 +49,127 @@ function buildShuffledOptions(row: RowDataPacket, seed: string) {
     displayLabel: String.fromCharCode(65 + index),
     text: String(option.text)
   }));
+}
+
+const trainingQuestionSql = `
+  SELECT id, question_type AS questionType, prompt,
+         option_a AS optionA, option_b AS optionB, option_c AS optionC,
+         option_d AS optionD, option_e AS optionE,
+         correct_answer AS correctAnswer, explanation, image_url AS imageUrl
+  FROM questions
+  WHERE exam_id = ? AND status = 'published'
+  ORDER BY id ASC`;
+
+type QuestionLoadTiming = {
+  attemptPoolMs: number;
+  attemptSqlMs: number;
+  questionPoolMs: number;
+  questionSqlMs: number;
+  questionLoadMs: number;
+  transformMs: number;
+  serializeMs: number;
+};
+
+async function loadAttemptQuestionContext(
+  attemptId: string,
+  userId: number,
+  timing: QuestionLoadTiming,
+) {
+  let connection: PoolConnection | undefined;
+  try {
+    const poolStartedAt = performance.now();
+    connection = await getPool().getConnection();
+    timing.attemptPoolMs = performance.now() - poolStartedAt;
+
+    const sqlStartedAt = performance.now();
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT exam_id AS examId, status, training_mode AS trainingMode
+       FROM attempts
+       WHERE id = ? AND user_id = ?
+       LIMIT 1`,
+      [attemptId, userId],
+    );
+    timing.attemptSqlMs = performance.now() - sqlStartedAt;
+    return rows[0] ?? null;
+  } finally {
+    connection?.release();
+  }
+}
+
+async function queryQuestionRows(
+  examId: number,
+  includeTrainingFields: boolean,
+  timing: QuestionLoadTiming,
+) {
+  let connection: PoolConnection | undefined;
+  try {
+    const poolStartedAt = performance.now();
+    connection = await getPool().getConnection();
+    timing.questionPoolMs = performance.now() - poolStartedAt;
+
+    const sqlStartedAt = performance.now();
+    const [rows] = await connection.query<RowDataPacket[]>(
+      includeTrainingFields ? trainingQuestionSql : publicQuestionSql,
+      [examId],
+    );
+    timing.questionSqlMs = performance.now() - sqlStartedAt;
+    return rows;
+  } finally {
+    connection?.release();
+  }
+}
+
+function transformQuestionRows(
+  rows: RowDataPacket[],
+  attemptId: string,
+) {
+  return seededShuffle(rows, attemptId).map((row) => ({
+    ...row,
+    options: buildShuffledOptions(row, `${attemptId}:${row.id}`),
+  }));
+}
+
+function formatServerTiming(
+  timing: QuestionLoadTiming,
+  sessionCheckMs: number,
+  totalMs: number,
+) {
+  return [
+    `session;dur=${sessionCheckMs.toFixed(1)}`,
+    `attempt-pool;dur=${timing.attemptPoolMs.toFixed(1)}`,
+    `attempt-sql;dur=${timing.attemptSqlMs.toFixed(1)}`,
+    `question-pool;dur=${timing.questionPoolMs.toFixed(1)}`,
+    `question-load;dur=${timing.questionLoadMs.toFixed(1)}`,
+    `question-sql;dur=${timing.questionSqlMs.toFixed(1)}`,
+    `transform;dur=${timing.transformMs.toFixed(1)}`,
+    `serialize;dur=${timing.serializeMs.toFixed(1)}`,
+    `total;dur=${totalMs.toFixed(1)}`,
+  ].join(", ");
+}
+
+function logQuestionLoad(
+  cacheStatus: QuestionCacheStatus | "training-bypass",
+  questionCount: number,
+  responseBytes: number,
+  timing: QuestionLoadTiming,
+  sessionCheckMs: number,
+  totalMs: number,
+) {
+  const payload = JSON.stringify({
+    event: "question_load_timing",
+    cacheStatus,
+    questionCount,
+    responseBytes,
+    cacheEntries: publishedQuestionCache.size,
+    sessionCheckMs,
+    ...timing,
+    totalMs,
+  });
+  if (totalMs >= env.QUESTION_LOAD_SLOW_MS) {
+    console.warn(payload);
+  } else {
+    console.info(payload);
+  }
 }
 
 const router = Router();
@@ -417,33 +542,58 @@ router.get("/attempts/:id", async (request, response, next) => {
 
 // Fetch questions for an in-progress attempt (without correct answers)
 router.get("/attempts/:id/questions", async (request, response, next) => {
+  const requestStartedAt = Number(response.locals.requestStartedAt ?? performance.now());
+  const timing: QuestionLoadTiming = {
+    attemptPoolMs: 0,
+    attemptSqlMs: 0,
+    questionPoolMs: 0,
+    questionSqlMs: 0,
+    questionLoadMs: 0,
+    transformMs: 0,
+    serializeMs: 0,
+  };
+
   try {
     const user = requireAuth(request, response);
     if (!user) return;
-    const [attemptRows] = await getPool().query<RowDataPacket[]>(
-      `SELECT attempts.id, exams.id AS examId, attempts.status, attempts.training_mode AS trainingMode
-       FROM attempts INNER JOIN exams ON exams.id = attempts.exam_id
-       WHERE attempts.id = ? AND attempts.user_id = ? LIMIT 1`,
-      [request.params.id, user.userId]
-    );
-    if (attemptRows.length === 0) { response.status(404).json({ message: "Attempt not found" }); return; }
-    const includeTrainingFields = Boolean(attemptRows[0].trainingMode);
-    const [rows] = await getPool().query<RowDataPacket[]>(
-      `SELECT id, question_type AS questionType, prompt, option_a AS optionA, option_b AS optionB, option_c AS optionC, option_d AS optionD,
-              option_e AS optionE, correct_answer AS correctAnswer, explanation, image_url AS imageUrl
-       FROM questions WHERE exam_id = ? AND status = 'published' ORDER BY id ASC`,
-      [attemptRows[0].examId]
-    );
-    // Deterministic shuffle using attempt ID as seed — same order on resume
-    const shuffled = seededShuffle(rows as RowDataPacket[], request.params.id);
-    response.json(shuffled.map((row) => {
-      const options = buildShuffledOptions(row, `${request.params.id}:${row.id}`);
-      if (includeTrainingFields) {
-        return { ...row, options };
-      }
-      const { correctAnswer: _correctAnswer, explanation: _explanation, ...safeRow } = row;
-      return { ...safeRow, options };
-    }));
+
+    const attempt = await loadAttemptQuestionContext(request.params.id, user.userId, timing);
+    if (!attempt) {
+      response.status(404).json({ message: "Attempt not found" });
+      return;
+    }
+
+    const includeTrainingFields = Boolean(attempt.trainingMode);
+    const questionLoadStartedAt = performance.now();
+    let cacheStatus: QuestionCacheStatus | "training-bypass";
+    let rows: RowDataPacket[];
+    if (includeTrainingFields) {
+      cacheStatus = "training-bypass";
+      rows = await queryQuestionRows(Number(attempt.examId), true, timing);
+    } else {
+      const cached = await publishedQuestionCache.get(Number(attempt.examId), () =>
+        queryQuestionRows(Number(attempt.examId), false, timing),
+      );
+      cacheStatus = cached.status;
+      rows = cached.value;
+    }
+    timing.questionLoadMs = performance.now() - questionLoadStartedAt;
+
+    const transformStartedAt = performance.now();
+    const questions = transformQuestionRows(rows, request.params.id);
+    timing.transformMs = performance.now() - transformStartedAt;
+
+    const serializeStartedAt = performance.now();
+    const body = JSON.stringify(questions);
+    timing.serializeMs = performance.now() - serializeStartedAt;
+
+    const sessionCheckMs = Number(response.locals.sessionCheckMs ?? 0);
+    const totalMs = performance.now() - requestStartedAt;
+    response.setHeader("Cache-Control", "private, no-cache");
+    response.setHeader("X-Question-Cache", cacheStatus);
+    response.setHeader("Server-Timing", formatServerTiming(timing, sessionCheckMs, totalMs));
+    logQuestionLoad(cacheStatus, questions.length, Buffer.byteLength(body), timing, sessionCheckMs, totalMs);
+    response.type("application/json").send(body);
   } catch (error) { next(error); }
 });
 

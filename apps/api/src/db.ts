@@ -283,7 +283,9 @@ export function getPool() {
       database: env.MYSQL_DATABASE,
       user: env.MYSQL_USER,
       password: env.MYSQL_PASSWORD,
-      connectionLimit: 10,
+      connectionLimit: env.MYSQL_CONNECTION_LIMIT,
+      waitForConnections: true,
+      queueLimit: 0,
       namedPlaceholders: true,
       timezone: "+00:00" // Use UTC for consistent timestamp handling
     });
