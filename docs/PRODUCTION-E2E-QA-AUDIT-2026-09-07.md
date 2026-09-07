@@ -239,7 +239,7 @@ For the selected CAPM pack, the dashboard correctly displayed nine completed tes
 | PROD-01 | High | Production config | UAT code helper is visible in production. | Render it only when public runtime configuration confirms UAT mode. |
 | ANALYTICS-02 | Medium | Stats | Dashboard uses 65%; exam/results use 70%. | Use each exam’s configured pass threshold everywhere. |
 | ANALYTICS-03 | Medium | Stats | Multiple-response domain scoring is order-sensitive. | Parse both values into normalized sets before comparison. |
-| DATA-01 | Medium | Content data | Domain taxonomy is inconsistent and fragmented. | Map imported values to controlled ECO/performance-domain records and validate imports. |
+| DATA-01 | Medium | Content data | ECO taxonomy is inconsistent, and delivery approaches are mislabeled as performance domains. | Map imports to controlled ECO domain/task, delivery-approach, and optional PMBOK performance-domain records; validate all published questions. |
 | PAY-04 | Medium | Checkout | Fee and charged MYR total are not represented by the application receipt. | Show fee before redirect and issue a receipt that reconciles displayed price with charged amount. |
 | BRAND-01 | Medium | Email | PMAdvance email branding differs from PM Exam Pro. | Use one customer-facing product identity and include the legal company name in the footer. |
 | A11Y-01 | Medium | Accessibility | Submission dialog lacks initial focus, focus trap, and Escape close. | Implement accessible modal focus management and restore focus on close. |
@@ -314,6 +314,58 @@ As of this review, PMI describes the current PMP exam as 180 questions in four h
 PMI describes CAPM as 150 questions in 180 minutes, including 15 unscored pretest questions. Its published content weighting is Fundamentals/Core Concepts 36%, Predictive 17%, Agile 20%, and Business Analysis 27%. Source: [PMI CAPM certification page](https://www.pmi.org/certifications/certified-associate-capm/).
 
 The current PM Exam Pro tests contain 21–50 published questions but display 180-minute limits. This makes pacing, stamina, and exam-condition claims weak. Add at least one blueprint-balanced full-length simulation per certification, official-style sections/breaks where applicable, and short practice sets whose shorter time limits are proportional and clearly labelled.
+
+#### Why ECO and performance classification is essential
+
+Domain tagging is not merely an administrative field. It is the foundation for three of the platform's most valuable promises:
+
+1. **Exam representativeness:** a simulation can be assembled in approximately the same proportions as the current certification blueprint.
+2. **Useful diagnosis:** a learner can see the capability or syllabus area causing lost marks, rather than receiving only an overall percentage.
+3. **Targeted improvement:** the system can recommend the next practice set, explanation, or revision topic with the highest expected benefit.
+
+It also gives administrators a measurable content-quality view: missing blueprint areas, overrepresented topics, stale questions, weak distractors, and domains where the bank is too small to support a reliable conclusion.
+
+The classifications must not be conflated:
+
+| Classification | Meaning | Recommended use |
+|---|---|---|
+| Exam Content Outline (ECO) domain | What the certification exam tests. For current PMP: People, Process, and Business Environment. CAPM uses its own four content areas. | Primary readiness, blueprint coverage, exam assembly, and learner diagnosis. |
+| ECO task/enabler or learning objective | The more specific capability beneath an ECO domain. | Precise weak-skill diagnosis and targeted practice. |
+| Delivery approach | The context or way of working: predictive, adaptive/agile, hybrid, or approach-agnostic. | Cross-cutting balance and comparison within ECO domains. It is not a “performance domain.” |
+| PMBOK performance domain | A broad area of project-management practice defined by the PMBOK Guide. The current Eighth Edition uses seven: governance, scope, schedule, finance, stakeholders, resources, and risk. | Optional secondary learning map and curriculum navigation; do not substitute it for the certification ECO. |
+
+PMI explicitly states that predictive, adaptive/agile, and hybrid approaches appear throughout the PMP ECO domains. Therefore, “Agile,” “Hybrid,” “Predictive,” and “Agnostic” should be stored and displayed as **delivery approaches**, not “Project Performance Domains.” The official [2026 PMP Examination Content Outline](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/new-pmp-examination-content-outline-2026.pdf) supports that cross-cutting model. The [PMBOK Guide overview](https://www.pmi.org/standards/pmbok) separately describes the current performance-domain structure.
+
+The current database values make this distinction especially important. The application calls Agile, Hybrid, Predictive, and Agnostic “performance domains,” while the ECO field contains a mixture of numeric codes, task descriptions, multiple newline-separated tasks, and punctuation variants. Aggregating those raw values produces dozens of fragmented rows rather than a clear readiness diagnosis.
+
+#### Recommended question-classification model
+
+Every published question should have these controlled fields:
+
+- Certification and blueprint version, including effective date
+- One primary ECO domain
+- One primary ECO task/learning objective and optional enabler
+- One delivery approach: predictive, adaptive/agile, hybrid, or agnostic
+- Optional PMBOK performance domain for curriculum navigation
+- One or more controlled topic/concept tags
+- Difficulty and cognitive level
+- Question type and source/reference
+- Content version, review owner, last validation date, and publication status
+
+Use identifiers and foreign keys behind the labels, not imported free text. When a question legitimately spans several tasks, retain one **primary scored classification** and optional secondary tags. This prevents one response from being counted multiple times or appearing as a new combined domain.
+
+#### How domain information should appear to learners
+
+- Show official, recognizable names rather than internal codes.
+- Display accuracy, first-seen sample size, recent trend, coverage, and evidence quality together.
+- Compare the learner's practice distribution with the official exam weighting: for example, “Business Environment is 26% of the current PMP blueprint; you have covered only 8 first-seen questions.”
+- Mark small samples as “Not enough evidence” instead of ranking them as strong or weak.
+- Lead with two or three priority gaps, not a table containing dozens of rows.
+- Give each gap a direct action such as “Practise 15 fresh Process questions.”
+- Allow a second view by delivery approach so a learner can detect, for example, strong predictive performance but weak adaptive/hybrid judgment across several ECO domains.
+- Keep PMBOK performance-domain analysis in a clearly labelled learning view rather than presenting it as the official exam blueprint.
+
+Without accurate ECO and approach tagging, the proposed Practice Readiness Index should not be launched: the domain component would give precise-looking but unreliable advice.
 
 #### Recommended learner-facing cards
 

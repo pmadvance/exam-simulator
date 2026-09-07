@@ -126,6 +126,49 @@ Normalize all question tags and calculate results using the certification's curr
 
 Every domain should show accuracy, number of first-seen questions attempted, trend, and whether there is enough evidence. A domain based on only a few questions should display “insufficient evidence,” not a confident mastery label.
 
+### Why ECO domains and performance classifications matter
+
+These fields are essential, not optional reporting labels. They allow PM Exam Pro to:
+
+- Build simulations in proportions that resemble the real exam blueprint.
+- Tell learners exactly which capability is reducing their score.
+- Recommend the most valuable next practice activity.
+- Distinguish a knowledge weakness from difficulty with a particular way of working.
+- Measure whether the question bank covers the complete syllabus.
+- Update and retire content safely when PMI changes an exam blueprint.
+
+The platform should use clear, separate classifications:
+
+| Classification | What it answers | Example |
+|---|---|---|
+| ECO domain | Which official exam area is being tested? | PMP People, Process, or Business Environment |
+| ECO task/objective | Which specific capability needs improvement? | A task or learning objective within the official outline |
+| Delivery approach | In which project context is the skill applied? | Predictive, adaptive/agile, hybrid, or agnostic |
+| PMBOK performance domain | Which broader practice area supports learning? | Current PMBOK areas such as governance, scope, schedule, finance, stakeholders, resources, or risk |
+
+The existing labels “Agile,” “Hybrid,” “Predictive,” and “Agnostic” describe **delivery approaches**. They should not be called Project Performance Domains. PMI's PMP outline says these approaches occur across the ECO domains rather than functioning as separate exam domains. The [2026 PMP Examination Content Outline](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/new-pmp-examination-content-outline-2026.pdf) and [PMBOK Guide overview](https://www.pmi.org/standards/pmbok) describe these separate structures.
+
+This distinction matters to the user. Consider two learners who both score 68%:
+
+- Learner A is balanced across all official domains but slow near the end.
+- Learner B is strong in People and weak in Business Environment, especially in adaptive/hybrid scenarios.
+
+Their overall score is identical, but the correct recommendation is completely different. Learner A needs pacing and stamina practice. Learner B needs targeted content practice. Accurate ECO, task, and delivery-approach tagging makes that recommendation possible.
+
+For every question, PM Exam Pro should store a blueprint version, one primary ECO domain, one primary task/objective, one delivery approach, controlled topic tags, difficulty, and review/version information. PMBOK performance domain can be an optional secondary learning classification. Use controlled lists rather than free text, and avoid combining several tasks into one new label.
+
+The learner dashboard should then show:
+
+- Official domain name and blueprint weight
+- First-seen accuracy and number of questions attempted
+- Coverage compared with the expected exam proportion
+- Recent direction of improvement
+- Confidence in the result or “Not enough evidence”
+- Performance by delivery approach within each domain
+- A direct action such as “Practise 15 fresh Business Environment questions”
+
+Until these tags are standardized, domain percentages may look precise but can give unreliable advice. The domain component of a readiness score should remain disabled or clearly provisional until content classification is clean.
+
 ### 5. Add time-management and stamina metrics
 
 Capture a timestamp for each answer and show:
