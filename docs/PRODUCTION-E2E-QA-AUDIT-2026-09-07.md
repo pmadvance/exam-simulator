@@ -251,6 +251,83 @@ For the selected CAPM pack, the dashboard correctly displayed nine completed tes
 
 ## 5. Recommended UI/UX changes
 
+### Is the current performance dashboard useful?
+
+**Partly.** It is useful for recalling what the learner completed: attempt count, average score, best score, recent history, detailed answer review, and a basic trend. These features can motivate continued practice and make prior mistakes retrievable.
+
+It is not yet strong enough to answer the learner's most important question: **“What should I do next to improve my actual-exam readiness?”** Current averages treat every attempt similarly, even when tests differ in length; best score can reward a one-off result or memorized retake; the dashboard does not measure timing, stamina, first-seen performance, coverage, or repeated weaknesses; and the domain data is currently mixed between products and inconsistently tagged.
+
+It should also avoid calling a learner “ready to pass” from a fixed raw percentage. PMI states that certification passing standards are determined through psychometric analysis, and the official result is criteria-based rather than a publicly stated universal percentage. PM Exam Pro may use a clearly labelled **practice target**, but it must not imply that 65% or 70% is PMI's official passing score. See the [PMI Certification Handbook](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/generic-certification-handbook.pdf) and [sample PMI exam result report](https://www.pmi.org/-/media/pmi/microsites/update-center/exam-result-report.pdf).
+
+### Build an actionable learner dashboard
+
+The revised dashboard should have four levels, in this order:
+
+1. **Next best action:** resume an attempt, review recurring errors, practise a weak domain, or take a full simulation.
+2. **Practice readiness:** a transparent, evidence-based band with the factors that increased or reduced it.
+3. **Performance diagnosis:** knowledge, pacing, consistency, coverage, confidence, and stamina.
+4. **Evidence:** attempt history and question-level review.
+
+#### Recommended metrics and calculations
+
+| Metric | Suggested calculation | Why it helps the learner |
+|---|---|---|
+| Recent weighted score | Weighted mean of the last five comparable exam-mode attempts, with weights `1, 2, 3, 4, 5` from oldest to newest | Reflects current ability more than old results. Compare like-for-like tests and exclude training mode. |
+| First-seen accuracy | Correct first responses on questions never previously seen ÷ first-seen questions | Reduces the false confidence caused by memorizing repeated questions. |
+| Blueprint-weighted mastery | Sum of each normalized domain's accuracy × official domain weight | Aligns study attention with what the certification actually tests. Use smoothed estimates until a domain has enough responses. |
+| Domain mastery confidence | Show domain accuracy with sample size and a confidence band; mark fewer than 15 first-seen items as “insufficient evidence” | Prevents a domain based on two lucky questions from looking mastered. |
+| Consistency | Mean and standard deviation of the last three to five comparable full simulations | A stable 75% is more reassuring than alternating between 55% and 90%. |
+| Coverage | Unique published questions attempted ÷ total published questions, plus blueprint coverage by domain/task | Shows whether the learner's result represents the syllabus or a narrow subset. |
+| Retention | Accuracy on previously incorrect questions after at least 3–7 days | Measures learning that persists, rather than immediate answer recall. |
+| Repeated-error rate | Questions or concepts answered incorrectly at least twice ÷ questions repeated | Produces a high-value revision list. |
+| Pacing | Median seconds per answered question, projected finish time, unanswered count, and percentage answered within target pace | Identifies time-management risk before exam day. Requires per-question timestamps. |
+| Stamina | Accuracy and median response time by exam quarter or official section | Reveals late-exam fatigue or rushing that an overall percentage hides. |
+| Review efficiency | Accuracy before versus after changing an answer; time spent on flagged questions | Helps determine whether review behavior improves or damages results. |
+| Confidence calibration | Optional confidence selection compared with actual correctness | Separates confident misconceptions from low-confidence knowledge gaps. Keep the control optional to avoid slowing every question. |
+| Practice quality | Full simulation completion, unanswered rate, excessive pauses, and repeated-question share | Distinguishes strong evidence from a short or heavily repeated attempt. |
+
+For small domain samples, use a transparent smoothed rate rather than raw accuracy. One simple option is:
+
+`smoothed mastery = (correct first-seen answers + 5) / (first-seen answers + 10)`
+
+This starts an untested domain at a neutral 50% prior and allows real evidence to dominate as the sample grows. The prior and minimum sample threshold should be validated with subject-matter experts and real learner data.
+
+#### Proposed Practice Readiness Index
+
+Until the platform has enough actual-exam outcome data to calibrate a predictive model, use a **Practice Readiness Index**, not a “probability of passing.” A practical version is:
+
+`Readiness = 35% recent weighted score + 30% blueprint-weighted mastery + 15% consistency + 10% pacing + 10% coverage`
+
+Rules:
+
+- Calculate it only after at least two comparable full-length simulations and adequate domain coverage.
+- Display “Not enough evidence yet” before that threshold.
+- Show the component scores and the exact reason for every recommendation.
+- Exclude training mode and strongly discount repeated-question performance.
+- Treat any readiness bands as PM Exam Pro coaching bands, not PMI result categories.
+- Calibrate weights and bands later by comparing consenting learners' practice data with their actual pass/fail and domain outcomes.
+
+#### Align simulations and analytics to current exam blueprints
+
+As of this review, PMI describes the current PMP exam as 180 questions in four hours with two 10-minute breaks. The July 2026 PMP outline weights People 33%, Process 41%, and Business Environment 26%; approximately 40% of items use predictive approaches and 60% are split between adaptive/agile and hybrid approaches. Sources: [PMI PMP certification page](https://www.pmi.org/certifications/project-management-pmp) and [2026 PMP Examination Content Outline](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/new-pmp-examination-content-outline-2026.pdf).
+
+PMI describes CAPM as 150 questions in 180 minutes, including 15 unscored pretest questions. Its published content weighting is Fundamentals/Core Concepts 36%, Predictive 17%, Agile 20%, and Business Analysis 27%. Source: [PMI CAPM certification page](https://www.pmi.org/certifications/certified-associate-capm/).
+
+The current PM Exam Pro tests contain 21–50 published questions but display 180-minute limits. This makes pacing, stamina, and exam-condition claims weak. Add at least one blueprint-balanced full-length simulation per certification, official-style sections/breaks where applicable, and short practice sets whose shorter time limits are proportional and clearly labelled.
+
+#### Recommended learner-facing cards
+
+- **Your next move:** “Review 8 recurring errors in Process” or “Take a fresh full simulation.”
+- **Practice readiness:** score/band plus “based on 3 full simulations, 82% blueprint coverage, stable pacing.”
+- **Domain map:** normalized official domains with mastery, first-seen sample size, trend, and a Practice button.
+- **Time management:** target pace, actual pace, projected completion, slowest domain, and late-section accuracy drop.
+- **Knowledge gaps:** top recurring concepts and confidently wrong questions.
+- **Progress quality:** unique-question coverage, repeat share, retention checks due, and consistency.
+- **Exam plan:** days remaining, recommended weekly questions/full simulations, and whether the learner is on pace.
+- **Recent evidence:** comparable attempts with score, duration, first-seen accuracy, unanswered count, and review link.
+
+The design should explain every number in plain language. A metric without an associated learner action should not occupy prime dashboard space.
+
 ### Before broader customer acquisition
 
 1. Remove the broken zero-question exam and reconcile every question-count claim.
@@ -287,6 +364,8 @@ Run on every release against staging with deterministic fixtures:
 - Single-choice, multiple-response in different selection orders, true/false, image questions, and explanations.
 - Training submission and its permitted post-submit routes.
 - Pack-specific dashboard, trends, ECO, and performance-domain calculations using known expected scores.
+- Readiness calculations using fixed fixtures for recent weighting, first-seen accuracy, smoothing, coverage, consistency, pacing, and stamina.
+- Protection against inflated readiness from repeated questions, training attempts, short tests, and inadequate sample sizes.
 - Authorization tests for receipts, attempts, orders, profiles, and admin routes using another user’s IDs.
 - Desktop and mobile smoke tests for Chrome, Safari, Firefox, and Edge.
 

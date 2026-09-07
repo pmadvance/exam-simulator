@@ -92,6 +92,89 @@ Recommended dashboard emphasis:
 - Plan: actual exam countdown and a suggested pace based on remaining tests/access days.
 - History: recent attempts, with detailed review one click away.
 
+## Is the current performance dashboard useful?
+
+**Yes for history, but only partly for improvement.** The present dashboard tells users how many tests they completed, their average and best score, recent results, and a basic trend. Detailed answer explanations are particularly valuable.
+
+However, average and best score alone do not tell a candidate whether their knowledge is broad, stable, well-paced, or retained. A high score may come from a short test or memorized retake. The dashboard currently cannot identify late-exam fatigue, repeated misconceptions, unseen syllabus areas, or whether the user is answering quickly enough under realistic conditions.
+
+PMI does not publish one universal percentage that PM Exam Pro can responsibly present as the official passing score. PMI says its passing standard is established through psychometric analysis and reports diagnostic performance by domain. PM Exam Pro should therefore use a clearly labelled **practice target/readiness indicator**, never a guaranteed pass prediction. Sources: [PMI Certification Handbook](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/generic-certification-handbook.pdf) and [sample PMI exam result report](https://www.pmi.org/-/media/pmi/microsites/update-center/exam-result-report.pdf).
+
+## Performance features that help candidates improve
+
+### 1. Give one clear next action
+
+The first card should recommend the highest-value action based on evidence:
+
+- Resume the current test.
+- Review recurring mistakes.
+- Practise the weakest official domain.
+- Retest material that was previously missed after a suitable delay.
+- Take a fresh full simulation when coverage and practice volume are sufficient.
+
+### 2. Measure current ability, not lifetime history
+
+Use a weighted average of the last five comparable exam-mode attempts, giving more weight to recent attempts. Keep short quizzes, full simulations, and training attempts separate.
+
+### 3. Show first-seen accuracy
+
+Report performance on questions the learner has not previously attempted. Keep retake improvement as a separate metric. This reduces false confidence caused by recognizing answers.
+
+### 4. Align domain mastery to the official blueprint
+
+Normalize all question tags and calculate results using the certification's current content weights. The July 2026 PMP blueprint is People 33%, Process 41%, and Business Environment 26%, with predictive and adaptive/agile/hybrid approaches represented throughout. CAPM currently weights Fundamentals/Core Concepts 36%, Predictive 17%, Agile 20%, and Business Analysis 27%. Sources: [2026 PMP Examination Content Outline](https://www.pmi.org/-/media/pmi/documents/public/pdf/certifications/new-pmp-examination-content-outline-2026.pdf) and [PMI CAPM certification page](https://www.pmi.org/certifications/certified-associate-capm/).
+
+Every domain should show accuracy, number of first-seen questions attempted, trend, and whether there is enough evidence. A domain based on only a few questions should display “insufficient evidence,” not a confident mastery label.
+
+### 5. Add time-management and stamina metrics
+
+Capture a timestamp for each answer and show:
+
+- Median time per question and projected finish time.
+- Unanswered questions and questions answered during a final rush.
+- Questions where the candidate became stuck.
+- Accuracy and speed by quarter/section of the exam.
+- Whether performance declines late in a full simulation.
+
+This requires realistic simulations. PMI currently describes PMP as 180 questions in four hours with two 10-minute breaks, and CAPM as 150 questions in 180 minutes. PM Exam Pro's current tests have 21–50 published questions but 180-minute limits, so they cannot yet provide meaningful full-exam pacing or stamina evidence. Sources: [PMI PMP certification page](https://www.pmi.org/certifications/project-management-pmp) and [PMI CAPM certification page](https://www.pmi.org/certifications/certified-associate-capm/).
+
+### 6. Track consistency, coverage, and retention
+
+- **Consistency:** average and score variation across the last three to five comparable full simulations.
+- **Coverage:** unique questions and official blueprint areas attempted.
+- **Retention:** accuracy when previously missed concepts return after several days.
+- **Recurring errors:** concepts or questions missed at least twice.
+- **Review effectiveness:** whether changing flagged answers usually helps or hurts.
+- **Confidence calibration:** optionally identify confident-but-wrong answers, which are the most dangerous misconceptions.
+
+### 7. Introduce a transparent Practice Readiness Index
+
+An initial coaching formula could be:
+
+`35% recent performance + 30% blueprint mastery + 15% consistency + 10% pacing + 10% coverage`
+
+This should:
+
+- Appear only after at least two comparable full simulations and adequate domain coverage.
+- Say “Not enough evidence yet” beforehand.
+- Exclude training mode and discount repeated questions.
+- Show each component and explain why the result changed.
+- Be labelled as PM Exam Pro practice guidance, not an official PMI score or probability of passing.
+- Be recalibrated later using consenting learners' actual exam outcomes.
+
+### Recommended dashboard layout
+
+1. **Your next move** — one recommended action.
+2. **Practice readiness** — transparent index and evidence quality.
+3. **Weakest domains** — mastery, sample size, trend, and direct Practice buttons.
+4. **Time and stamina** — pace, projected finish, and late-exam performance.
+5. **Recurring mistakes** — high-priority review list.
+6. **Coverage and retention** — unseen content and revision checks due.
+7. **Exam plan** — days remaining and recommended weekly activity.
+8. **Recent attempts** — comparable results with detailed review.
+
+The key design rule is simple: **every prominent metric should tell the learner what to do next.**
+
 ## Recommended UX test plan
 
 ### Moderated usability sessions
@@ -164,4 +247,3 @@ Measure task completion, first-click success, time, errors, abandonment points, 
 ## Launch readiness statement
 
 PM Exam Pro’s core experience is working and demonstrates strong potential. After the immediate stabilization items are resolved and retested, the platform should be in a much stronger position for public acquisition: credible catalog promises, trustworthy payment, uninterrupted exam access, and analytics that clearly guide each learner’s next step.
-
