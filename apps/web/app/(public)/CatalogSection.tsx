@@ -75,7 +75,7 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
             "Complete ECO Coverage",
             "Real-Exam Timed Simulations",
             "Detailed Explanations & Rationales",
-            "Companion tool for PM Advance 5-day bootcamp graduates",
+            "Companion tool for Professional Project Management Certification Candidates",
           ].map((feature) => (
             <div className="col-sm-6 col-lg-auto" key={feature}>
               <div

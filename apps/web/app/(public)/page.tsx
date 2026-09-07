@@ -53,7 +53,7 @@ export default async function HomePage() {
               </h1>
 
               <p className="mb-4" style={{ color: "rgba(255,255,255,0.6)", fontSize: "1.1rem", lineHeight: 1.65, maxWidth: "52ch" }}>
-                Don&apos;t risk costly retake fees. Master the exact logic of the PMP®, CAPM®, PMI-RMP®, and PMI-ACP® exams with realistic timed simulations, instant explanations, and 15+ years of PM Advance expertise.
+                Don&apos;t risk costly retake fees. Master the exact logic of the PMP®, CAPM®, PMI-RMP®, and PMI-ACP® exams with realistic timed simulations, instant explanations, and 15+ years of proven certification training expertise, so you walk in prepared and walk out certified.
               </p>
 
               <div className="d-flex gap-3 flex-wrap mb-4">
@@ -106,15 +106,15 @@ export default async function HomePage() {
               >
                 <h6 className="fw-bold mb-3" style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase" }}>
                   <i className="bi bi-lightning-charge-fill me-1" style={{ color: "#E8792B" }} />
-                  Why Trust PM Advance?
+                  Why Professionals Choose PM Exam Pro
                 </h6>
                 <ul className="list-unstyled d-grid gap-3 mb-0">
                   {[
-                    { icon: "bi-patch-check", text: "100% Aligned with PMI Standards - Official Training Partner #4930." },
-                    { icon: "bi-people", text: "3,000+ Malaysian Graduates Trained - 15+ years of proven certification excellence." },
-                    { icon: "bi-cash-coin", text: "100% HRDCorp Claimable - Fully eligible for corporate/employer sponsorship." },
-                    { icon: "bi-graph-up-arrow", text: "Smart Performance Analytics - Pinpoint your weaknesses before buying the real exam." },
-                    { icon: "bi-lightbulb", text: "Detailed Answer Explanations - Learn why an answer is right or wrong instantly." },
+                    { icon: "bi-patch-check", text: "Questions crafted in full alignment with PMI standards — developed in strict alignment with the official PMI Examination Content Outline by a PMI Official Training Partner." },
+                    { icon: "bi-people", text: "Over 3,000 professionals certified — 15+ years of real classroom experience behind every question." },
+                    { icon: "bi-stopwatch", text: "Exam-realistic simulations — timed, pressure-tested, and built to mirror the actual exam experience." },
+                    { icon: "bi-graph-up-arrow", text: "Know exactly where you stand before exam day — our analytics pinpoint your weak spots so you study what matters." },
+                    { icon: "bi-lightbulb", text: "Every question comes with a clear explanation — understand the reasoning, not just the answer." },
                   ].map((item) => (
                     <li key={item.text} className="d-flex align-items-start gap-3">
                       <span
@@ -140,10 +140,10 @@ export default async function HomePage() {
         <div className="container py-4">
           <div className="row g-4 text-center">
             {[
-              { value: "15+", label: "Years of Excellence", icon: "bi-calendar-check" },
-              { value: "3,000+", label: "Graduates Trained", icon: "bi-mortarboard" },
-              { value: "1,000+", label: "Real-Exam Style Questions", icon: "bi-book" },
-              { value: "ATP #4930", label: "PMI Authorized", icon: "bi-patch-check" },
+              { value: "15+", label: "Years of Certification Expertise", icon: "bi-calendar-check" },
+              { value: "3,000+", label: "Professionals Certified", icon: "bi-mortarboard" },
+              { value: "1,000+", label: "PMI-Aligned Practice Questions", icon: "bi-book" },
+              { value: "PMI Authorized", label: "ATP #4930", icon: "bi-patch-check" },
             ].map((stat) => (
               <div className="col-6 col-md-3" key={stat.label}>
                 <div className="d-flex flex-column align-items-center gap-1">

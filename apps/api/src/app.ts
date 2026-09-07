@@ -178,8 +178,8 @@ function parseForwardedHeader(value: unknown) {
   return normalizeIp(forPart);
 }
 
-function getRequestIps(request: Request) {
-  return Array.from(new Set([
+export function getRequestIps(request: Request) {
+  const forwardedIps = Array.from(new Set([
     normalizeIp(request.header("cf-connecting-ip")),
     normalizeIp(request.header("true-client-ip")),
     normalizeIp(request.header("x-client-ip")),
@@ -189,6 +189,14 @@ function getRequestIps(request: Request) {
     normalizeIp(request.header("fastly-client-ip")),
     normalizeIp(request.header("x-real-ip")),
     parseForwardedHeader(request.header("forwarded")),
+  ].filter(Boolean)));
+
+  // A request from the Next.js middleware reaches the API over loopback. When
+  // it carries a forwarded visitor IP, the proxy socket must not satisfy a
+  // localhost allowlist rule on behalf of that visitor.
+  if (forwardedIps.length > 0) return forwardedIps;
+
+  return Array.from(new Set([
     normalizeIp(request.ip),
     normalizeIp(request.socket.remoteAddress),
   ].filter(Boolean)));

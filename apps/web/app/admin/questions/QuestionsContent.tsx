@@ -272,7 +272,7 @@ export function QuestionsContent({ initialQuestions, products, exams }: Question
   }
 
   async function deleteQuestion(id: number) {
-    if (!confirm("Delete question " + id + "?")) return;
+    if (!confirm("Delete question " + id + "? This cannot be undone.")) return;
     setBusy(true);
     try {
       await browserApiFetch<void>("/api/admin/questions/" + id, {
@@ -863,6 +863,7 @@ export function QuestionsContent({ initialQuestions, products, exams }: Question
                   <th>Perf. Domain</th>
                   <th>Difficulty</th>
                   <th>Status</th>
+                  <th className="text-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -911,6 +912,18 @@ export function QuestionsContent({ initialQuestions, products, exams }: Question
                     <td className="small text-muted">{q.performanceDomain ?? "\u2014"}</td>
                     <td><StatusBadge status={q.difficulty ?? "\u2014"} /></td>
                     <td><StatusBadge status={q.status ?? "published"} /></td>
+                    <td className="text-end" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => void deleteQuestion(q.id)}
+                        disabled={busy}
+                        aria-label={`Delete question ${q.id}`}
+                        title="Delete question"
+                      >
+                        <i className="bi bi-trash" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

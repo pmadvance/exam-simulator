@@ -146,6 +146,15 @@ export function PublicNavbar() {
                       <div style={{ fontSize: 11, color: "#6B7280" }}>{user.email}</div>
                     </div>
                     <Link
+                      href="/"
+                      className="d-flex align-items-center gap-2 px-3 py-2 small text-decoration-none"
+                      style={{ color: "#3D4149" }}
+                      onClick={() => setShowMenu(false)}
+                    >
+                      <i className="bi bi-house-door" style={{ color: "#2B7A87" }} />
+                      Home
+                    </Link>
+                    <Link
                       href="/me/dashboard"
                       className="d-flex align-items-center gap-2 px-3 py-2 small text-decoration-none"
                       style={{ color: "#3D4149" }}
