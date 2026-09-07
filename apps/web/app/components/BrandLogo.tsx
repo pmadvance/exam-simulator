@@ -30,7 +30,7 @@ export function BrandLogo({
         <div className="brand-divider" />
         <div className="brand-tagline">PASS WITH CONFIDENCE</div>
         {showCompanyLine && (
-          <div className="brand-company">by PM Advance Sdn Bhd · PMI ATP #4930</div>
+          <div className="brand-company">PM Exam Pro · PMI ATP #4930</div>
         )}
       </div>
     </div>

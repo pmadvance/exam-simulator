@@ -16,6 +16,7 @@ import {
   apiUrl,
 } from "../../../lib/api";
 import { useCurrency } from "../../../lib/currency";
+import { PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENT_MESSAGE, isValidPassword } from "../../../lib/password-policy";
 
 type PaymentProvider = "toyyibpay" | "stripe" | "paypal" | "billplz";
 
@@ -61,9 +62,6 @@ export function CheckoutScreen() {
 
   // Registration fields (guest)
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState("");
-  const [occupation, setOccupation] = useState("");
-  const [gender, setGender] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -92,13 +90,13 @@ export function CheckoutScreen() {
     if (!email) { setCodeStatus("Enter your email first."); return; }
     setBusy(true);
     try {
-      const res = await browserApiFetch<{ message: string; code?: string }>("/api/auth/send-verification-code", {
+      const res = await browserApiFetch<{ message: string }>("/api/auth/send-verification-code", {
         method: "POST",
         body: JSON.stringify({ email }),
       });
       setCodeSent(true);
       setCodeCooldown(60);
-      setCodeStatus(res.code ? `${res.message} (Dev code: ${res.code})` : res.message);
+      setCodeStatus(res.message);
     } catch (err) {
       setCodeStatus(err instanceof Error ? err.message : "Failed to send code.");
     } finally {
@@ -268,8 +266,8 @@ export function CheckoutScreen() {
           setBusy(false);
           return;
         }
-        if (password.length < 8) {
-          setError("Password must be at least 8 characters.");
+        if (!isValidPassword(password)) {
+          setError(PASSWORD_REQUIREMENT_MESSAGE);
           setBusy(false);
           return;
         }
@@ -284,9 +282,6 @@ export function CheckoutScreen() {
           return;
         }
         body.fullName = fullName.trim();
-        body.age = age ? Number(age) : undefined;
-        body.occupation = occupation.trim() || undefined;
-        body.gender = gender || undefined;
         body.email = email.trim();
         body.password = password;
         body.verificationCode = verificationCode.trim();
@@ -395,6 +390,7 @@ export function CheckoutScreen() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your full name"
+                      autoComplete="name"
                       disabled={busy}
                     />
                   </div>
@@ -408,55 +404,9 @@ export function CheckoutScreen() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
+                      autoComplete="email"
                       disabled={busy}
                     />
-                  </div>
-
-                  <div className="row g-3">
-                    <div className="col-sm-4">
-                      <label htmlFor="age" className="form-label">Age</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        id="age"
-                        min={13}
-                        max={120}
-                        value={age}
-                        onChange={(e) => setAge(e.target.value)}
-                        placeholder="Age"
-                        disabled={busy}
-                      />
-                    </div>
-                    <div className="col-sm-8">
-                      <label htmlFor="occupation" className="form-label">Occupation</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="occupation"
-                        value={occupation}
-                        onChange={(e) => setOccupation(e.target.value)}
-                        placeholder="e.g. Project manager"
-                        maxLength={120}
-                        disabled={busy}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-3 mt-3">
-                    <label htmlFor="gender" className="form-label">Gender</label>
-                    <select
-                      className="form-select"
-                      id="gender"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      disabled={busy}
-                    >
-                      <option value="">Prefer not to say</option>
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                      <option value="non_binary">Non-binary</option>
-                      <option value="other">Other</option>
-                    </select>
                   </div>
 
                   <div className="mb-3">
@@ -467,9 +417,12 @@ export function CheckoutScreen() {
                       id="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Minimum 8 characters"
+                      placeholder="8+ characters, including a letter and number"
+                      minLength={PASSWORD_MIN_LENGTH}
+                      autoComplete="new-password"
                       disabled={busy}
                     />
+                    <div className="form-text">{PASSWORD_REQUIREMENT_MESSAGE}</div>
                   </div>
 
                   <div className="mb-3">
@@ -498,7 +451,7 @@ export function CheckoutScreen() {
                     {codeStatus ? (
                       <div className="form-text">{codeStatus}</div>
                     ) : (
-                      <div className="form-text">Enter your email first, then click &quot;Get Code&quot; — or use code <strong>111111</strong> for UAT testing</div>
+                      <div className="form-text">Enter your email first, then click &quot;Get Code&quot;.</div>
                     )}
                   </div>
 
@@ -528,8 +481,10 @@ export function CheckoutScreen() {
               )}
 
               <h2 className="h5 fw-bold mb-3" style={{ color: "#1A1D23" }}>Voucher code</h2>
+              <label className="visually-hidden" htmlFor="voucherCode">Voucher code (optional)</label>
               <div className="input-group mb-2">
                 <input
+                  id="voucherCode"
                   type="text"
                   className="form-control"
                   placeholder="Enter voucher code (optional)"

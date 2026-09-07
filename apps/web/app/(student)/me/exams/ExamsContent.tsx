@@ -183,6 +183,7 @@ export function ExamsContent() {
               const hasInProgress = summary?.inProgress !== null;
               const inProgress = summary?.inProgress;
               const attemptCount = summary?.submittedCount ?? 0;
+              const isReady = exam.questionCount > 0;
 
               return (
                 <div
@@ -220,7 +221,11 @@ export function ExamsContent() {
                       </div>
                     )}
                   </div>
-                  {hasInProgress ? (
+                  {!isReady ? (
+                    <span className="badge rounded-pill ms-3 flex-shrink-0 px-3 py-2" style={{ background: "#F3F4F6", color: "#6B7280" }}>
+                      Coming soon
+                    </span>
+                  ) : hasInProgress ? (
                     <Link
                       href={`/exams/${exam.slug}`}
                       className="btn btn-sm text-white ms-3 flex-shrink-0 fw-semibold"

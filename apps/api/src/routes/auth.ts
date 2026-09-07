@@ -8,6 +8,7 @@ import { signAccessToken, signRefreshToken } from "../lib/auth.js";
 import { sendMail, verificationCodeEmail, passwordResetEmail } from "../lib/mail.js";
 import { getDatabaseReady, getSessionPolicy, toIsoString, writeAuditLog } from "../helpers.js";
 import { registerSchema, loginSchema } from "../schemas.js";
+import { passwordSchema } from "../password-policy.js";
 import {
   ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME,
   getAuthUser, requireAuth,
@@ -18,7 +19,7 @@ import { isRateLimited } from "../middleware/rate-limit.js";
 import { z } from "zod";
 
 const router = Router();
-const PASSWORD_REQUIREMENTS = /^(?=.*[A-Za-z])(?=.*\d).+$/;
+const isDevelopmentUat = process.env.NODE_ENV !== "production" && env.UAT_TEST_MODE && Boolean(env.UAT_VERIFICATION_CODE);
 
 // ─── Send email verification code ───
 router.post("/send-verification-code", async (request, response, next) => {
@@ -73,11 +74,10 @@ router.post("/send-verification-code", async (request, response, next) => {
       }
     }
 
-    const isProduction = process.env.NODE_ENV === "production";
     response.json(
-      isProduction && !env.UAT_TEST_MODE
+      process.env.NODE_ENV === "production"
         ? { message: "Verification code sent to your email." }
-        : { message: "Verification code sent to your email.", code: env.UAT_TEST_MODE ? env.UAT_VERIFICATION_CODE : code }
+        : { message: "Verification code sent to your email.", code: isDevelopmentUat ? env.UAT_VERIFICATION_CODE : code }
     );
   } catch (error) {
     next(error);
@@ -98,7 +98,7 @@ router.post("/register", async (request, response, next) => {
       return;
     }
 
-    const isUatBypass = env.UAT_TEST_MODE && payload.verificationCode === env.UAT_VERIFICATION_CODE;
+    const isUatBypass = isDevelopmentUat && payload.verificationCode === env.UAT_VERIFICATION_CODE;
 
     if (!isUatBypass) {
       const [codeRows] = await getPool().query<RowDataPacket[]>(
@@ -129,14 +129,11 @@ router.post("/register", async (request, response, next) => {
     const passwordHash = await bcrypt.hash(payload.password, 10);
 
     const [result] = await getPool().execute(
-      `INSERT INTO users (email, full_name, age, occupation, gender, password_hash, privacy_accepted_at, privacy_notice_version, terms_accepted_at, terms_version)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, '2026-05-26', CURRENT_TIMESTAMP, '2026-05-26')`,
+      `INSERT INTO users (email, full_name, password_hash, privacy_accepted_at, privacy_notice_version, terms_accepted_at, terms_version)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP, '2026-05-26', CURRENT_TIMESTAMP, '2026-05-26')`,
       [
         payload.email,
         payload.fullName,
-        payload.age ?? null,
-        payload.occupation || null,
-        payload.gender ?? null,
         passwordHash
       ]
     );
@@ -195,7 +192,7 @@ router.post("/login", async (request, response, next) => {
     }
 
     const [rows] = await getPool().query(
-      `SELECT id, email, full_name AS fullName, password_hash AS passwordHash, role, status
+      `SELECT id, email, full_name AS fullName, password_hash AS passwordHash, age, occupation, gender, role, status
        FROM users
        WHERE email = ?
        LIMIT 1`,
@@ -209,6 +206,9 @@ router.post("/login", async (request, response, next) => {
       passwordHash: string;
       role: string;
       status: string;
+      age: number | null;
+      occupation: string | null;
+      gender: string | null;
     }>)[0];
 
     if (!user || user.status !== "active") {
@@ -276,7 +276,8 @@ router.post("/login", async (request, response, next) => {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        role: user.role
+        role: user.role,
+        needsOnboarding: user.role === "student" && !user.age && !user.occupation && !user.gender
       }
     });
   } catch (error) {
@@ -490,7 +491,7 @@ router.post("/forgot-password", async (request, response, next) => {
 
 router.post("/reset-password", async (request, response, next) => {
   try {
-    const payload = z.object({ token: z.string().min(20), password: z.string().min(8) }).parse(request.body);
+    const payload = z.object({ token: z.string().min(20), password: passwordSchema }).parse(request.body);
     const databaseReady = await getDatabaseReady();
     if (!databaseReady) {
       response.status(503).json({ message: "Database unavailable. Start Docker services first." });
@@ -582,7 +583,8 @@ router.get("/me", async (request, response, next) => {
           age: rows[0].age,
           occupation: rows[0].occupation,
           gender: rows[0].gender,
-          role: rows[0].role
+          role: rows[0].role,
+          needsOnboarding: rows[0].role === "student" && !rows[0].age && !rows[0].occupation && !rows[0].gender
         });
         return;
       }
@@ -679,14 +681,10 @@ router.patch("/profile", async (request, response, next) => {
       age: z.coerce.number().int().min(13).max(120).nullable().optional(),
       occupation: z.string().trim().max(120).nullable().optional(),
       gender: z.enum(["female", "male", "non_binary", "prefer_not_to_say", "other"]).nullable().optional(),
-      currentPassword: z.string().min(8).optional(),
-      newPassword: z.string().min(8).optional()
+      currentPassword: z.string().min(1).optional(),
+      newPassword: passwordSchema.optional()
     }).parse(request.body);
     if (payload.newPassword && !payload.currentPassword) { response.status(400).json({ message: "Current password required to change password" }); return; }
-    if (payload.newPassword && !PASSWORD_REQUIREMENTS.test(payload.newPassword)) {
-      response.status(400).json({ message: "New password must contain both letters and numbers" });
-      return;
-    }
     if (payload.currentPassword) {
       const [rows] = await getPool().query<RowDataPacket[]>(`SELECT password_hash AS passwordHash FROM users WHERE id = ? LIMIT 1`, [user.userId]);
       const matches = await bcrypt.compare(payload.currentPassword, rows[0]?.passwordHash as string);

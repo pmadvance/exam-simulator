@@ -63,7 +63,7 @@ const envSchema = z.object({
     .union([z.literal("true"), z.literal("false")])
     .default("false")
     .transform((value) => value === "true"),
-  UAT_VERIFICATION_CODE: z.string().min(4).max(6).default("111111"),
+  UAT_VERIFICATION_CODE: z.string().min(4).max(6).optional(),
   // Base URL the API is reachable at (for gateway callbacks)
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
   // SMTP email settings (Brevo: smtp-relay.brevo.com:587)
@@ -71,7 +71,7 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().default(""),
   SMTP_PASS: z.string().default(""),
-  SMTP_FROM: z.string().default("PMAdvance <noreply@pmadvance.com>")
+  SMTP_FROM: z.string().default("PM Exam Pro <noreply@pmexampro.com>")
 });
 
 export const env = envSchema.parse(process.env);

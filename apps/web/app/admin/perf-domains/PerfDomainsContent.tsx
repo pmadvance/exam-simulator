@@ -28,9 +28,9 @@ export function PerfDomainsContent({ initialDomains, products }: PerfDomainsCont
         body: JSON.stringify({ productId, name, description: description || null }),
       });
       setDomains((d) => [...d, created]);
-      setStatusMessage(`Performance Domain "${created.name}" created.`);
+      setStatusMessage(`Delivery Approach "${created.name}" created.`);
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to create Performance Domain.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to create Delivery Approach.");
     } finally {
       setBusy(false);
     }
@@ -44,9 +44,9 @@ export function PerfDomainsContent({ initialDomains, products }: PerfDomainsCont
         body: JSON.stringify({ name, description: description || null }),
       });
       setDomains((d) => d.map((x) => x.id === id ? { ...x, name, description: description || null } : x));
-      setStatusMessage(`Performance Domain updated.`);
+      setStatusMessage(`Delivery Approach updated.`);
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to update Performance Domain.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to update Delivery Approach.");
     } finally {
       setBusy(false);
     }
@@ -57,9 +57,9 @@ export function PerfDomainsContent({ initialDomains, products }: PerfDomainsCont
     try {
       await browserApiFetch<void>("/api/admin/performance-domains/" + id, { method: "DELETE" });
       setDomains((d) => d.filter((x) => x.id !== id));
-      setStatusMessage("Performance Domain deleted.");
+      setStatusMessage("Delivery Approach deleted.");
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Failed to delete Performance Domain.");
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete Delivery Approach.");
     } finally {
       setBusy(false);
     }
@@ -74,7 +74,7 @@ export function PerfDomainsContent({ initialDomains, products }: PerfDomainsCont
         </div>
       )}
       <DomainManagementTab
-        title="Performance Domains"
+        title="Delivery Approaches"
         icon="bi-bullseye"
         description="Knowledge/process area domains. Each product can have different Performance domains."
         domains={domains}

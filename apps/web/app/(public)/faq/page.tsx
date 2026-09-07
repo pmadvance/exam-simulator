@@ -28,7 +28,7 @@ const faqItems = [
   },
   {
     question: "Is this platform PMI-authorized?",
-    answer: "Yes. PM Advance Sdn Bhd is an official PMI Authorized Training Partner (ATP #4930). All of our exam simulators and practice questions are meticulously aligned with the latest global PMI Examination Content Outline (ECO).",
+    answer: "Yes. PM Exam Pro is provided by a PMI Authorized Training Partner (ATP #4930). Our exam simulators and practice questions are aligned with the latest applicable PMI Examination Content Outline (ECO).",
     icon: "bi-patch-check",
   },
   {

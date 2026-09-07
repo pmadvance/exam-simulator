@@ -85,6 +85,19 @@ function resolveImageUrl(raw: string | null | undefined): string | null {
 
 const router = Router();
 
+async function examHasPublishedQuestions(examId: number) {
+  const [rows] = await getPool().query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id = ? AND status = 'published'`,
+    [examId]
+  );
+  return Number(rows[0]?.questionCount ?? 0) > 0;
+}
+
+async function isPublishedExam(examId: number) {
+  const [rows] = await getPool().query<RowDataPacket[]>(`SELECT status FROM exams WHERE id = ? LIMIT 1`, [examId]);
+  return rows[0]?.status === "published";
+}
+
 // ───────────── Admin Product CRUD ─────────────
 
 router.get("/products", async (_request, response, next) => {
@@ -223,6 +236,16 @@ router.patch("/questions/:id", async (request, response, next) => {
     );
     const examId = Number(questionRows[0]?.examId ?? 0);
     if (!examId) { response.status(404).json({ message: "Question not found" }); return; }
+    if (payload.status === "draft" && await isPublishedExam(examId)) {
+      const [publishedRows] = await getPool().query<RowDataPacket[]>(
+        `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id = ? AND status = 'published' AND id <> ?`,
+        [examId, request.params.id]
+      );
+      if (Number(publishedRows[0]?.questionCount ?? 0) < 1) {
+        response.status(409).json({ message: "Add another published question or unpublish the exam before unpublishing its final question." });
+        return;
+      }
+    }
     const columnMap: Record<string, string> = { questionType: "question_type", optionA: "option_a", optionB: "option_b", optionC: "option_c", optionD: "option_d", optionE: "option_e", correctAnswer: "correct_answer", imageUrl: "image_url", ecoDomain: "eco_domain", performanceDomain: "performance_domain", difficulty: "difficulty" };
     const sets: string[] = [];
     const vals: (string | number | null)[] = [];
@@ -249,6 +272,16 @@ router.delete("/questions/:id", async (request, response, next) => {
     );
     const examId = Number(questionRows[0]?.examId ?? 0);
     if (!examId) { response.status(404).json({ message: "Question not found" }); return; }
+    if (await isPublishedExam(examId)) {
+      const [publishedRows] = await getPool().query<RowDataPacket[]>(
+        `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id = ? AND status = 'published' AND id <> ?`,
+        [examId, request.params.id]
+      );
+      if (Number(publishedRows[0]?.questionCount ?? 0) < 1) {
+        response.status(409).json({ message: "Add another published question or unpublish the exam before deleting its final question." });
+        return;
+      }
+    }
     const [result] = await getPool().execute(`DELETE FROM questions WHERE id = ?`, [request.params.id]);
     if ((result as { affectedRows: number }).affectedRows === 0) { response.status(404).json({ message: "Question not found" }); return; }
     invalidatePublishedQuestions(examId);
@@ -543,6 +576,10 @@ function parseCsvRow(line: string): string[] {
 router.post("/exams", async (request, response, next) => {
   try {
     const payload = examCreateSchema.parse(request.body);
+    if (payload.status === "published") {
+      response.status(409).json({ message: "Create the exam as a draft, add at least one published question, then publish it." });
+      return;
+    }
     const slug = payload.slug || await generateUniqueSlug(payload.title, "exams");
     const [result] = await getPool().execute(
       `INSERT INTO exams (product_id, slug, title, time_limit_minutes, pass_threshold, status)
@@ -558,6 +595,10 @@ router.post("/exams", async (request, response, next) => {
 router.patch("/exams/:id", async (request, response, next) => {
   try {
     const payload = examUpdateSchema.parse(request.body);
+    if (payload.status === "published" && !(await examHasPublishedQuestions(Number(request.params.id)))) {
+      response.status(409).json({ message: "An exam needs at least one published question before it can be published." });
+      return;
+    }
     const columnMap: Record<string, string> = { timeLimitMinutes: "time_limit_minutes", passThreshold: "pass_threshold" };
     const sets: string[] = [];
     const vals: (string | number | null)[] = [];
@@ -578,6 +619,10 @@ router.patch("/exams/:id", async (request, response, next) => {
 router.patch("/exams/:id/status", async (request, response, next) => {
   try {
     const { status } = z.object({ status: z.enum(["draft", "published"]) }).parse(request.body);
+    if (status === "published" && !(await examHasPublishedQuestions(Number(request.params.id)))) {
+      response.status(409).json({ message: "An exam needs at least one published question before it can be published." });
+      return;
+    }
     const [result] = await getPool().execute(`UPDATE exams SET status = ? WHERE id = ?`, [status, request.params.id]);
     if ((result as { affectedRows: number }).affectedRows === 0) { response.status(404).json({ message: "Exam not found" }); return; }
     await writeAuditLog(response.locals.user.userId, "admin.exam.status", "exam", request.params.id, { status });

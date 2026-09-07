@@ -58,11 +58,11 @@ export default async function HomePage() {
 
               <div className="d-flex gap-3 flex-wrap mb-4">
                 <Link
-                  href="/login"
+                  href="#catalog"
                   className="btn btn-lg fw-semibold px-4 text-white d-flex align-items-center gap-2"
                   style={{ background: "#E8792B", borderRadius: 10, border: "none", fontSize: 16 }}
                 >
-                  Start Free Practice Exam
+                  Try a Free Preview
                   <i className="bi bi-arrow-right" />
                 </Link>
                 <a
@@ -142,7 +142,7 @@ export default async function HomePage() {
             {[
               { value: "15+", label: "Years of Certification Expertise", icon: "bi-calendar-check" },
               { value: "3,000+", label: "Professionals Certified", icon: "bi-mortarboard" },
-              { value: "1,000+", label: "PMI-Aligned Practice Questions", icon: "bi-book" },
+              { value: "Current", label: "PMI-Aligned Practice Content", icon: "bi-book" },
               { value: "PMI Authorized", label: "ATP #4930", icon: "bi-patch-check" },
             ].map((stat) => (
               <div className="col-6 col-md-3" key={stat.label}>

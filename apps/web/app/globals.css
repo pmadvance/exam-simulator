@@ -1587,6 +1587,34 @@ body.pm-exam-fullscreen .simulatorCard {
 
 /* Add body padding when bottom nav is visible (student pages) */
 @media (max-width: 767.98px) {
+  .compactExamHeader {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: -14px -14px 8px;
+    padding: 10px 14px;
+    background: #fff;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .compactExamActions {
+    position: sticky;
+    top: 55px;
+    z-index: 19;
+    margin-inline: -14px;
+    padding: 8px 14px;
+    background: #fff;
+  }
+
+  .compactExamActions > div:first-child {
+    width: 100%;
+    flex-wrap: nowrap !important;
+  }
+
+  .compactExamActions > div:first-child button {
+    flex: 1;
+  }
+
   .has-bottom-nav {
     padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }

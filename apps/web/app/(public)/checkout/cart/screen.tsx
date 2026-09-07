@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SkeletonCheckout } from "../../../components/Skeleton";
 import {
   browserApiFetch,
@@ -14,6 +14,7 @@ import {
   apiUrl,
 } from "../../../../lib/api";
 import { useCurrency } from "../../../../lib/currency";
+import { PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENT_MESSAGE, isValidPassword } from "../../../../lib/password-policy";
 
 const BUNDLE_DISCOUNT_PERCENT = 10;
 type PaymentProvider = "toyyibpay" | "stripe" | "paypal" | "billplz";
@@ -38,11 +39,12 @@ export function CartCheckoutScreen() {
 
   // Registration fields (guest)
   const [fullName, setFullName] = useState("");
-  const [age, setAge] = useState("");
-  const [occupation, setOccupation] = useState("");
-  const [gender, setGender] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [codeStatus, setCodeStatus] = useState("");
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   // Voucher
@@ -54,6 +56,30 @@ export function CartCheckoutScreen() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<{ email: string; fullName: string } | null>(null);
   const { formatUsd } = useCurrency();
+
+  useEffect(() => {
+    if (codeCooldown <= 0) return;
+    const timer = setTimeout(() => setCodeCooldown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [codeCooldown]);
+
+  const sendVerificationCode = useCallback(async () => {
+    if (!email) { setCodeStatus("Enter your email first."); return; }
+    setBusy(true);
+    try {
+      const result = await browserApiFetch<{ message: string }>("/api/auth/send-verification-code", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setCodeSent(true);
+      setCodeCooldown(60);
+      setCodeStatus(result.message);
+    } catch (error) {
+      setCodeStatus(error instanceof Error ? error.message : "Failed to send code.");
+    } finally {
+      setBusy(false);
+    }
+  }, [email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,14 +164,13 @@ export function CartCheckoutScreen() {
           if (!fullName.trim() || !email.trim() || !password.trim()) {
             setError("Please fill in all registration fields."); setBusy(false); return;
           }
-          if (password.length < 8) { setError("Password must be at least 8 characters."); setBusy(false); return; }
+          if (!isValidPassword(password)) { setError(PASSWORD_REQUIREMENT_MESSAGE); setBusy(false); return; }
+          if (!verificationCode.trim()) { setError("Please enter the email verification code."); setBusy(false); return; }
           if (!privacyAccepted) { setError("Please agree to the Terms of Use and Privacy Notice."); setBusy(false); return; }
           body.fullName = fullName.trim();
-          body.age = age ? Number(age) : undefined;
-          body.occupation = occupation.trim() || undefined;
-          body.gender = gender || undefined;
           body.email = email.trim();
           body.password = password;
+          body.verificationCode = verificationCode.trim();
           body.privacyAccepted = true;
         }
         if (voucherCode.trim()) body.voucherCode = voucherCode.trim();
@@ -172,14 +197,13 @@ export function CartCheckoutScreen() {
           if (!fullName.trim() || !email.trim() || !password.trim()) {
             setError("Please fill in all registration fields."); setBusy(false); return;
           }
-          if (password.length < 8) { setError("Password must be at least 8 characters."); setBusy(false); return; }
+          if (!isValidPassword(password)) { setError(PASSWORD_REQUIREMENT_MESSAGE); setBusy(false); return; }
+          if (!verificationCode.trim()) { setError("Please enter the email verification code."); setBusy(false); return; }
           if (!privacyAccepted) { setError("Please agree to the Terms of Use and Privacy Notice."); setBusy(false); return; }
           body.fullName = fullName.trim();
-          body.age = age ? Number(age) : undefined;
-          body.occupation = occupation.trim() || undefined;
-          body.gender = gender || undefined;
           body.email = email.trim();
           body.password = password;
+          body.verificationCode = verificationCode.trim();
           body.privacyAccepted = true;
           const ref = getRefCookie();
           if (ref) body.referralCode = ref;
@@ -249,35 +273,26 @@ export function CartCheckoutScreen() {
                   </p>
                   <div className="mb-3">
                     <label htmlFor="fullName" className="form-label">Full name</label>
-                    <input type="text" className="form-control" id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} disabled={busy} />
+                    <input type="text" className="form-control" id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" disabled={busy} />
                   </div>
                   <div className="mb-3">
                     <label htmlFor="email" className="form-label">Email address</label>
-                    <input type="email" className="form-control" id="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
-                  </div>
-                  <div className="row g-3">
-                    <div className="col-sm-4">
-                      <label htmlFor="cartAge" className="form-label">Age</label>
-                      <input type="number" className="form-control" id="cartAge" min={13} max={120} value={age} onChange={(e) => setAge(e.target.value)} disabled={busy} />
-                    </div>
-                    <div className="col-sm-8">
-                      <label htmlFor="cartOccupation" className="form-label">Occupation</label>
-                      <input type="text" className="form-control" id="cartOccupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} placeholder="e.g. Project manager" maxLength={120} disabled={busy} />
-                    </div>
-                  </div>
-                  <div className="mb-3 mt-3">
-                    <label htmlFor="cartGender" className="form-label">Gender</label>
-                    <select className="form-select" id="cartGender" value={gender} onChange={(e) => setGender(e.target.value)} disabled={busy}>
-                      <option value="">Prefer not to say</option>
-                      <option value="female">Female</option>
-                      <option value="male">Male</option>
-                      <option value="non_binary">Non-binary</option>
-                      <option value="other">Other</option>
-                    </select>
+                    <input type="email" className="form-control" id="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" disabled={busy} />
                   </div>
                   <div className="mb-3">
                     <label htmlFor="password" className="form-label">Password</label>
-                    <input type="password" className="form-control" id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 8 characters" disabled={busy} />
+                    <input type="password" className="form-control" id="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="8+ characters, including a letter and number" minLength={PASSWORD_MIN_LENGTH} autoComplete="new-password" disabled={busy} />
+                    <div className="form-text">{PASSWORD_REQUIREMENT_MESSAGE}</div>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="cartVerificationCode" className="form-label">Verification code</label>
+                    <div className="input-group">
+                      <input id="cartVerificationCode" className="form-control" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="6-digit code" disabled={busy} />
+                      <button className="btn btn-outline-primary" type="button" onClick={sendVerificationCode} disabled={busy || codeCooldown > 0 || !email}>
+                        {codeCooldown > 0 ? `Resend (${codeCooldown}s)` : codeSent ? "Resend code" : "Get code"}
+                      </button>
+                    </div>
+                    <div className="form-text">{codeStatus || "Enter your email first, then click “Get code”."}</div>
                   </div>
                   <div className="form-check mb-3">
                     <input
@@ -302,8 +317,9 @@ export function CartCheckoutScreen() {
               )}
 
               <h2 className="h5 mb-3">Voucher code</h2>
+              <label className="visually-hidden" htmlFor="cartVoucherCode">Voucher code (optional)</label>
               <div className="input-group mb-2">
-                <input type="text" className="form-control" placeholder="Voucher code (optional)" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} disabled={busy} />
+                <input id="cartVoucherCode" type="text" className="form-control" placeholder="Voucher code (optional)" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value)} disabled={busy} />
                 <button className="btn btn-outline-secondary" onClick={handleApplyVoucher} disabled={busy || !voucherCode.trim()}>Apply</button>
               </div>
               {voucherResult && <p className="text-success small mb-0">Discount {formatUsd(voucherResult.discount)} applied!</p>}

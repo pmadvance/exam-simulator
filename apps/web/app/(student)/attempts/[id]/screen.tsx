@@ -26,7 +26,7 @@ export function AttemptReviewScreen({ result }: Props) {
   const incorrectCount = result.questions.length - correctCount;
   const scorePct = result.totalQuestions ? Math.round((result.score / result.totalQuestions) * 100) : 0;
   const shareText = `I scored ${scorePct}% on ${result.examTitle} with PM Exam Pro.`;
-  const shareUrl = typeof window !== "undefined" ? window.location.origin : "https://pmadvance.com";
+  const shareUrl = typeof window !== "undefined" ? window.location.origin : "https://pmexampro.com";
   const shareLinks = [
     {
       label: "X",

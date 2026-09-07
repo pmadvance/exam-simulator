@@ -71,7 +71,7 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
 
         <div className="row g-2 justify-content-center mb-4">
           {[
-            "1,000+ Question Bank",
+            "Comprehensive Question Bank",
             "Complete ECO Coverage",
             "Real-Exam Timed Simulations",
             "Detailed Explanations & Rationales",

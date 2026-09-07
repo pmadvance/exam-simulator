@@ -275,7 +275,7 @@ function StudentLayoutInner({ children }: { children: ReactNode }) {
 
       <footer className="d-none d-md-block" style={{ background: "#1A1D23", color: "#9CA3AF", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
         <div className="container">
-          &copy; {new Date().getFullYear()} PM Advance Sdn Bhd &middot; PMI Authorized Training Partner #4930
+          &copy; {new Date().getFullYear()} PM Exam Pro &middot; PMI Authorized Training Partner #4930
         </div>
       </footer>
       <MobileBottomNav />

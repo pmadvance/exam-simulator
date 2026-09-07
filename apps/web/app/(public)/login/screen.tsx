@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { browserApiFetch, type LoginResponse } from "../../../lib/api";
+import { PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENT_MESSAGE, isValidPassword } from "../../../lib/password-policy";
 import { BrandLogo } from "../../components/BrandLogo";
 
 export function LoginScreen() {
@@ -22,9 +23,6 @@ export function LoginScreen() {
   // Register state
   const [regEmail, setRegEmail] = useState("");
   const [regFullName, setRegFullName] = useState("");
-  const [regAge, setRegAge] = useState("");
-  const [regOccupation, setRegOccupation] = useState("");
-  const [regGender, setRegGender] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regCode, setRegCode] = useState("");
   const [regPrivacyAccepted, setRegPrivacyAccepted] = useState(false);
@@ -52,7 +50,7 @@ export function LoginScreen() {
 
       setStatusMessage(`Signed in as ${response.user.fullName}.`);
       const next = searchParams.get("next");
-      router.push(next ?? "/me/dashboard");
+      router.push(next ?? (response.user.needsOnboarding ? "/me/onboarding" : "/me/dashboard"));
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Login failed.");
     } finally {
@@ -64,13 +62,13 @@ export function LoginScreen() {
     if (!regEmail) { setRegStatus("Enter your email first."); return; }
     setRegBusy(true);
     try {
-      const res = await browserApiFetch<{ message: string; code?: string }>("/api/auth/send-verification-code", {
+      const res = await browserApiFetch<{ message: string }>("/api/auth/send-verification-code", {
         method: "POST",
         body: JSON.stringify({ email: regEmail })
       });
       setCodeSent(true);
       setCodeCooldown(60);
-      setRegStatus(res.code ? `${res.message} (Dev code: ${res.code})` : res.message);
+      setRegStatus(res.message);
     } catch (error) {
       setRegStatus(error instanceof Error ? error.message : "Failed to send code.");
     } finally {
@@ -80,6 +78,10 @@ export function LoginScreen() {
 
   async function handleRegister(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isValidPassword(regPassword)) {
+      setRegStatus(PASSWORD_REQUIREMENT_MESSAGE);
+      return;
+    }
     setRegBusy(true);
 
     try {
@@ -88,9 +90,6 @@ export function LoginScreen() {
         body: JSON.stringify({
           email: regEmail,
           fullName: regFullName,
-          age: regAge ? Number(regAge) : undefined,
-          occupation: regOccupation.trim() || undefined,
-          gender: regGender || undefined,
           password: regPassword,
           verificationCode: regCode,
           privacyAccepted: regPrivacyAccepted
@@ -114,9 +113,9 @@ export function LoginScreen() {
           <div className="d-inline-flex align-items-center justify-content-center mb-3">
             <BrandLogo size="compact" />
           </div>
-          <h4 className="fw-bold mb-1" style={{ color: "#1A1D23", letterSpacing: "-0.02em" }}>
+          <h1 className="h4 fw-bold mb-1" style={{ color: "#1A1D23", letterSpacing: "-0.02em" }}>
             {tab === "login" ? "Welcome back" : "Create your account"}
-          </h4>
+          </h1>
           <p style={{ color: "#6B7280", fontSize: 14 }}>
             {tab === "login" ? "Sign in to access your practice exams" : "Register a new student account"}
           </p>
@@ -167,6 +166,7 @@ export function LoginScreen() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -179,6 +179,7 @@ export function LoginScreen() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
+                    autoComplete="current-password"
                     required
                   />
                 </div>
@@ -219,6 +220,7 @@ export function LoginScreen() {
                     placeholder="Your full name"
                     value={regFullName}
                     onChange={(e) => setRegFullName(e.target.value)}
+                    autoComplete="name"
                     required
                     minLength={2}
                   />
@@ -232,50 +234,9 @@ export function LoginScreen() {
                     placeholder="you@example.com"
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
+                    autoComplete="email"
                     required
                   />
-                </div>
-                <div className="row g-3">
-                  <div className="col-sm-4">
-                    <label htmlFor="regAge" className="form-label">Age</label>
-                    <input
-                      id="regAge"
-                      type="number"
-                      className="form-control"
-                      placeholder="Age"
-                      value={regAge}
-                      onChange={(e) => setRegAge(e.target.value)}
-                      min={13}
-                      max={120}
-                    />
-                  </div>
-                  <div className="col-sm-8">
-                    <label htmlFor="regOccupation" className="form-label">Occupation</label>
-                    <input
-                      id="regOccupation"
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Project manager"
-                      value={regOccupation}
-                      onChange={(e) => setRegOccupation(e.target.value)}
-                      maxLength={120}
-                    />
-                  </div>
-                </div>
-                <div className="mb-3 mt-3">
-                  <label htmlFor="regGender" className="form-label">Gender</label>
-                  <select
-                    id="regGender"
-                    className="form-select"
-                    value={regGender}
-                    onChange={(e) => setRegGender(e.target.value)}
-                  >
-                    <option value="">Prefer not to say</option>
-                    <option value="female">Female</option>
-                    <option value="male">Male</option>
-                    <option value="non_binary">Non-binary</option>
-                    <option value="other">Other</option>
-                  </select>
                 </div>
                 <div className="mb-3">
                   <label htmlFor="regPassword" className="form-label">Password</label>
@@ -283,13 +244,14 @@ export function LoginScreen() {
                     id="regPassword"
                     type="password"
                     className="form-control"
-                    placeholder="Minimum 8 characters"
+                    placeholder="8+ characters, including a letter and number"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     required
-                    minLength={8}
+                    minLength={PASSWORD_MIN_LENGTH}
+                    autoComplete="new-password"
                   />
-                  <div className="form-text">At least 8 characters</div>
+                  <div className="form-text">{PASSWORD_REQUIREMENT_MESSAGE}</div>
                 </div>
                 <div className="mb-3">
                   <label htmlFor="regCode" className="form-label">Verification Code</label>

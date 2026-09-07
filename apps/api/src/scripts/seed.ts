@@ -30,28 +30,28 @@ async function run() {
     ["admin@example.com", "Demo Admin", adminPasswordHash, "admin"]
   );
 
-  // ── Products (13 PM Advance training practice-exam packs) ──
+  // ── Products (13 PM Exam Pro practice-exam packs) ──
   await getPool().execute(
     `INSERT INTO products (slug, title, description, category, difficulty, price_usd, access_days, visibility)
      VALUES
        ('pmp-exam-prep',
         'PMP® Exam Preparation Practice Pack',
-        'Comprehensive practice exams aligned to the latest PMP Examination Content Outline (ECO). Covers People, Process, and Business Environment domains with situational, scenario-based questions. Ideal for participants of PM Advance''s 5-day PMP® Exam Preparation Training (35 PDUs). Includes 1,000-question bank, timed simulations, and detailed answer explanations.',
+        'Comprehensive practice exams aligned to the latest PMP Examination Content Outline (ECO). Covers People, Process, and Business Environment domains with situational, scenario-based questions. Ideal for PM Exam Pro learners preparing for the PMP® exam. Includes timed simulations and detailed answer explanations.',
         'Professional Certification', 'Advanced', 299, 90, 'published'),
 
        ('capm-exam-prep',
         'CAPM® Exam Preparation Practice Pack',
-        'Practice exams designed for the Certified Associate in Project Management (CAPM®) certification. Covers predictive, agile, and hybrid project management approaches based on the PMBOK® Guide 7th Edition. Perfect companion to PM Advance''s 3-day CAPM® Training (23 contact hours). Features scenario-based questions with full explanations.',
+        'Practice exams designed for the Certified Associate in Project Management (CAPM®) certification. Covers predictive, agile, and hybrid project management approaches based on the PMBOK® Guide 7th Edition. A focused PM Exam Pro study companion featuring scenario-based questions with full explanations.',
         'Professional Certification', 'Intermediate', 199, 90, 'published'),
 
        ('pmi-rmp-exam-prep',
         'PMI-RMP® Risk Management Practice Pack',
-        'Targeted practice exams for the PMI Risk Management Professional (PMI-RMP®) certification. Covers risk strategy, stakeholder engagement, risk process facilitation, risk monitoring, and advanced quantitative/qualitative analysis. Aligned with PM Advance''s 4-day PMI-RMP® Certification Training curriculum.',
+        'Targeted PM Exam Pro practice exams for the PMI Risk Management Professional (PMI-RMP®) certification. Covers risk strategy, stakeholder engagement, risk process facilitation, risk monitoring, and advanced quantitative/qualitative analysis.',
         'Professional Certification', 'Advanced', 249, 90, 'published'),
 
        ('pmi-acp-exam-prep',
         'PMI-ACP® Agile Practice Pack',
-        'Agile-focused practice exams for the PMI Agile Certified Practitioner (PMI-ACP®) certification. Covers Scrum, Kanban, Lean, XP, and hybrid frameworks. Questions address agile principles, value-driven delivery, stakeholder engagement, team performance, and adaptive planning. Complements PM Advance''s 4-day PMI-ACP® Training (28 contact hours).',
+        'Agile-focused PM Exam Pro practice exams for the PMI Agile Certified Practitioner (PMI-ACP®) certification. Covers Scrum, Kanban, Lean, XP, and hybrid frameworks. Questions address agile principles, value-driven delivery, stakeholder engagement, team performance, and adaptive planning.',
         'Professional Certification', 'Advanced', 249, 90, 'published'),
 
        ('pm-essentials',

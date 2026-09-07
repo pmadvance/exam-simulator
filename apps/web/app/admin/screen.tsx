@@ -59,7 +59,7 @@ const sidebarItems = [
   { key: "orders", label: "Orders", icon: "bi-receipt" },
   { key: "vouchers", label: "Vouchers", icon: "bi-ticket-perforated" },
   { key: "eco-domains", label: "ECO Domains", icon: "bi-diagram-3" },
-  { key: "perf-domains", label: "Performance Domains", icon: "bi-bullseye" },
+  { key: "perf-domains", label: "Delivery Approaches", icon: "bi-bullseye" },
   { key: "reports", label: "Reports", icon: "bi-graph-up" },
   { key: "settings", label: "Settings", icon: "bi-sliders" },
   { key: "sessions", label: "Sessions", icon: "bi-wifi" },
@@ -1719,8 +1719,8 @@ export function DashboardScreen({
                           <input className="form-control form-control-sm" list="eco-domain-suggestions" placeholder="e.g. People, Process" value={questionForm.ecoDomain} onChange={(e) => setQuestionForm({ ...questionForm, ecoDomain: e.target.value })} />
                         </div>
                         <div className="col-md-4">
-                          <label className="form-label small fw-semibold">Performance Domain</label>
-                          <input className="form-control form-control-sm" list="perf-domain-suggestions" placeholder="e.g. Team, Planning, Delivery" value={questionForm.performanceDomain} onChange={(e) => setQuestionForm({ ...questionForm, performanceDomain: e.target.value })} />
+                          <label className="form-label small fw-semibold">Delivery Approach</label>
+                          <input className="form-control form-control-sm" list="perf-domain-suggestions" placeholder="Predictive, Agile, Hybrid, or Agnostic" value={questionForm.performanceDomain} onChange={(e) => setQuestionForm({ ...questionForm, performanceDomain: e.target.value })} />
                         </div>
                         <div className="col-12">
                           <label className="form-label small fw-semibold">Question Prompt</label>
@@ -2282,7 +2282,7 @@ export function DashboardScreen({
           {/* ========== PERFORMANCE DOMAINS ========== */}
           {activeTab === "perf-domains" && (
             <DomainManagementTab
-              title="Performance Domains"
+              title="Delivery Approaches"
               icon="bi-bullseye"
               description="Knowledge/process area domains. Each product can have different Performance domains."
               domains={perfDomains}

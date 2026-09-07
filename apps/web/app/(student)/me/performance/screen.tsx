@@ -52,6 +52,21 @@ type PerformanceData = {
   attempts: AttemptSummary[];
   ecoDomains: DomainStat[];
   performanceDomains: DomainStat[];
+  readiness?: {
+    score: number | null;
+    eligible: boolean;
+    confidence: "low" | "medium" | "high";
+    recentAverage: number;
+    firstSeenAccuracy: number;
+    coveragePercent: number;
+    consistency: number;
+    domainBalance: number;
+    unansweredRate: number;
+    recurringMistakes: number;
+    weakAreas: string[];
+    recommendations: string[];
+    examAttemptCount: number;
+  };
 };
 
 type TabKey = "overall" | "past-results" | "performance-domain" | "eco-domain" | "trends";
@@ -59,7 +74,7 @@ type TabKey = "overall" | "past-results" | "performance-domain" | "eco-domain" |
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "overall", label: "Overall", icon: "bi-graph-up" },
   { key: "past-results", label: "Past Results", icon: "bi-table" },
-  { key: "performance-domain", label: "Project Performance Domain", icon: "bi-pie-chart" },
+  { key: "performance-domain", label: "Delivery Approach", icon: "bi-pie-chart" },
   { key: "eco-domain", label: "ECO Domain", icon: "bi-diagram-3" },
   { key: "trends", label: "Trends", icon: "bi-activity" },
 ];
@@ -145,55 +160,22 @@ function DomainTable({ domains, label }: { domains: DomainStat[]; label: string 
 }
 
 export function PerformanceScreen() {
-  const { selectedExamSlug, currentEnrollment, enrollments } = useExam();
+  const { selectedExamSlug, currentEnrollment } = useExam();
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("overall");
-  const [productExams, setProductExams] = useState<string[]>([]);
-
-  // Load product exams for filtering
-  useEffect(() => {
-    let cancelled = false;
-    
-    async function loadProduct() {
-      if (!selectedExamSlug) {
-        setProductExams([]);
-        return;
-      }
-      
-      try {
-        const product = await browserApiFetch<{ exams: Array<{ slug: string }> }>(`/api/products/${selectedExamSlug}`);
-        if (!cancelled) {
-          setProductExams((product.exams ?? []).map((e) => e.slug));
-        }
-      } catch {
-        if (!cancelled) setProductExams([]);
-      }
-    }
-    
-    loadProduct();
-    return () => { cancelled = true; };
-  }, [selectedExamSlug]);
 
   // Load performance data
   useEffect(() => {
-    browserApiFetch<PerformanceData>("/api/performance")
+    setLoading(true);
+    const query = selectedExamSlug ? `?productSlug=${encodeURIComponent(selectedExamSlug)}` : "";
+    browserApiFetch<PerformanceData>(`/api/performance${query}`)
       .then(setData)
       .catch(() => setData({ attempts: [], ecoDomains: [], performanceDomains: [] }))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedExamSlug]);
 
-  // Filter data by selected product's exams
-  const filteredData = useMemo(() => {
-    if (!data) return null;
-    if (productExams.length === 0) return data; // Show all if no product selected
-    
-    return {
-      attempts: data.attempts.filter((a) => productExams.includes(a.examSlug)),
-      ecoDomains: data.ecoDomains, // Domain stats are aggregated, keep as-is
-      performanceDomains: data.performanceDomains,
-    };
-  }, [data, productExams]);
+  const filteredData = data;
 
   const stats = useMemo(() => {
     if (!filteredData || filteredData.attempts.length === 0) return null;
@@ -319,6 +301,41 @@ export function PerformanceScreen() {
         </div>
       )}
 
+      {filteredData.readiness && (
+        <section className="card mb-4" aria-labelledby="readiness-title">
+          <div className="card-body p-4">
+            <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+              <div>
+                <h2 id="readiness-title" className="h5 mb-1">Exam readiness</h2>
+                <p className="text-muted small mb-0">An evidence-based guide from recent scores, question coverage, consistency, and domain balance—not a guarantee of the certification result.</p>
+              </div>
+              <div className="text-end">
+                <div className="fw-bold" style={{ color: filteredData.readiness.score !== null && filteredData.readiness.score >= 75 ? SUCCESS : filteredData.readiness.score !== null && filteredData.readiness.score >= 60 ? WARNING : DANGER, fontSize: filteredData.readiness.score === null ? 18 : 30 }}>
+                  {filteredData.readiness.score === null ? "Building evidence" : `${filteredData.readiness.score}/100`}
+                </div>
+                <span className="badge text-bg-light border text-capitalize">{filteredData.readiness.confidence} confidence</span>
+              </div>
+            </div>
+            <div className="row g-3 mb-3">
+              {[
+                ["Weighted recent score", filteredData.readiness.recentAverage],
+                ["First-seen accuracy", filteredData.readiness.firstSeenAccuracy],
+                ["Question coverage", filteredData.readiness.coveragePercent],
+                ["Score consistency", filteredData.readiness.consistency],
+                ["Unanswered rate", filteredData.readiness.unansweredRate],
+                ["Recurring mistakes", filteredData.readiness.recurringMistakes],
+              ].map(([label, value]) => (
+                <div className="col-6 col-lg-2" key={String(label)}>
+                  <div className="rounded-3 bg-light p-3 h-100"><div className="fw-bold fs-5">{value}{label === "Recurring mistakes" ? "" : "%"}</div><div className="text-muted small">{label}</div></div>
+                </div>
+              ))}
+            </div>
+            <h3 className="h6">Recommended next steps</h3>
+            <ul className="mb-0 ps-3">{filteredData.readiness.recommendations.map((item) => <li className="mb-1" key={item}>{item}</li>)}</ul>
+          </div>
+        </section>
+      )}
+
       {/* Tabs */}
       <div className="card">
         <div className="d-flex gap-1 px-4 pt-3 pb-0 flex-wrap" style={{ borderBottom: "1px solid #E5E7EB" }}>
@@ -348,7 +365,7 @@ export function PerformanceScreen() {
         <div className="card-body p-4">
           {activeTab === "overall" && <OverallTab data={filteredData} />}
           {activeTab === "past-results" && <PastResultsTab attempts={filteredData.attempts} />}
-          {activeTab === "performance-domain" && <DomainTable domains={filteredData.performanceDomains} label="Performance Domain" />}
+          {activeTab === "performance-domain" && <DomainTable domains={filteredData.performanceDomains} label="Delivery Approach" />}
           {activeTab === "eco-domain" && <DomainTable domains={filteredData.ecoDomains} label="ECO Domain" />}
           {activeTab === "trends" && <TrendsTab data={filteredData} />}
         </div>

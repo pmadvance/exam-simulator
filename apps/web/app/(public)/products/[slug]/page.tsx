@@ -27,6 +27,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const hasAccess = enrollment?.hasAccess === true;
 
   const publishedExams = product.exams.filter((exam) => exam.status !== "draft");
+  const readyExams = publishedExams.filter((exam) => exam.questionCount > 0);
 
   return (
     <>
@@ -52,31 +53,31 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             Comprehensive mock exams built to simulate the exact logic, difficulty, and structure of the latest PMP Examination Content Outline (ECO). This pack targets situational, scenario-based questions across all three core domains: People, Process, and Business Environment.
           </p>
           <p className="statusLine" style={{ marginTop: 8 }}>
-            Ideal for candidates aiming to pass on their first try or as a post-training tool for PM Advance Bootcamp graduates.
+            Ideal for candidates aiming to pass on their first try or as a post-training tool for PM Exam Pro learners.
           </p>
 
           <div className="detailList" style={{ marginTop: 12 }}>
             <span>Access Duration: {product.accessDays} Days Full Access</span>
             <span>Difficulty Level: {product.difficulty} (Matches actual PMI exam standard)</span>
-            <span>Total Question Pool: 1,000+ Premium Simulated Questions</span>
-            <span>Full Simulators: {publishedExams.length} Comprehensive Practice {publishedExams.length === 1 ? "Test" : "Tests"}</span>
+            <span>Growing question pool with detailed explanations</span>
+            <span>Available Tests: {readyExams.length} Practice {readyExams.length === 1 ? "Test" : "Tests"}</span>
           </div>
 
           {!hasAccess && (
             <>
               <h3 style={{ marginTop: 20 }}>Practice Tests</h3>
-              {publishedExams.length === 0 ? (
-                <p className="statusLine">Exam contents are being published. Please check back soon.</p>
+              {readyExams.length === 0 ? (
+                <p className="statusLine">Questions are coming soon. A free preview will appear when published questions are available.</p>
               ) : (
                 <div className="stack" style={{ marginTop: 10 }}>
                   <div className="questionCard">
-                    <p className="questionLabel">{publishedExams.length} practice {publishedExams.length === 1 ? "test" : "tests"} included</p>
-                    <h3 style={{ marginTop: 4 }}>{publishedExams[0].title}</h3>
+                    <p className="questionLabel">{readyExams.length} practice {readyExams.length === 1 ? "test" : "tests"} included</p>
+                    <h3 style={{ marginTop: 4 }}>{readyExams[0].title}</h3>
                     <p className="statusLine" style={{ marginTop: 8 }}>
-                      {publishedExams[0].questionCount} questions · {publishedExams[0].timeLimitMinutes} minutes · pass threshold {publishedExams[0].passThreshold}%
+                      {readyExams[0].questionCount} questions · {readyExams[0].timeLimitMinutes} minutes · pass threshold {readyExams[0].passThreshold}%
                     </p>
                     <div className="simulatorActions" style={{ marginTop: 8 }}>
-                      <Link href={`/exams/${publishedExams[0].slug}`} className="secondaryButton">
+                      <Link href={`/exams/${readyExams[0].slug}`} className="secondaryButton">
                         Try free preview
                       </Link>
                     </div>

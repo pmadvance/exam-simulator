@@ -89,7 +89,7 @@ export const stripeProvider: PaymentProvider = {
           price_data: {
             currency: "usd",
             product_data: {
-              name: request.description.slice(0, 120) || "PM Advance Purchase",
+              name: request.description.slice(0, 120) || "PM Exam Pro Purchase",
               description: `Order #${request.orderId}`,
             },
             unit_amount: Math.round(request.amount * 100),

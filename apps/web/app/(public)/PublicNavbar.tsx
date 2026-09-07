@@ -13,6 +13,7 @@ export function PublicNavbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<{ email: string; fullName: string } | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { currency, supportedCurrencies, setCurrency: chooseCurrency, loading: currencyLoading } = useCurrency();
 
@@ -74,6 +75,10 @@ export function PublicNavbar() {
         <Link href="/" className="navbar-brand d-flex align-items-center py-0">
           <BrandLogo size="compact" />
         </Link>
+
+        <button className="btn btn-sm d-md-none ms-auto me-2" type="button" aria-label="Toggle main menu" aria-expanded={showMobileNav} onClick={() => setShowMobileNav((value) => !value)}>
+          <i className={`bi ${showMobileNav ? "bi-x-lg" : "bi-list"}`} style={{ fontSize: 22 }} />
+        </button>
 
         {/* Nav links — centered */}
         <div className="d-none d-md-flex align-items-center gap-1 ms-4">
@@ -223,6 +228,17 @@ export function PublicNavbar() {
             </div>
           )}
         </div>
+        {showMobileNav && (
+          <div className="d-md-none position-absolute start-0 end-0 bg-white border-top shadow-sm p-3" style={{ top: 63 }}>
+            <div className="container d-grid gap-1">
+              {navLinks.map((link) => (
+                <Link key={link.href} href={link.href} className="px-3 py-2 rounded-2 text-decoration-none fw-medium" style={{ color: isActive(link.href) ? "#E8792B" : "#3D4149", background: isActive(link.href) ? "#FFF3EB" : "transparent" }} onClick={() => setShowMobileNav(false)}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );

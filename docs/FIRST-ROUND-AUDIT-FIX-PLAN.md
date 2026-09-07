@@ -1,7 +1,7 @@
 # PM Exam Pro First-Round Audit Fix Plan
 
 **Prepared:** 7 September 2026  
-**Status:** Awaiting approval — no application changes from this plan have started  
+**Status:** Approved and implemented for the first remediation release; see `FIRST-ROUND-REMEDIATION-REPORT.md` for verification and remaining dependencies.
 **Source documents:**
 
 - `docs/PRODUCTION-E2E-QA-AUDIT-2026-09-07.md`
@@ -536,4 +536,3 @@ This remediation round is complete when:
 - Accessibility and mobile acceptance checks pass.
 - Payment code and behavior remain unchanged.
 - Documentation, tests, commits, remote synchronization, and post-deployment smoke results are complete.
-

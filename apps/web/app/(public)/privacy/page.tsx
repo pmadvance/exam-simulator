@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           Legal
         </p>
         <h1 className="fw-bold mb-3">Privacy Notice</h1>
-        <p className="text-muted">Version 2026-05-26. This notice explains how PM Advance Sdn Bhd handles personal data for this practice exam platform.</p>
+        <p className="text-muted">Version 2026-05-26. This notice explains how PM Exam Pro handles personal data for this practice exam platform.</p>
 
         <div className="d-grid gap-4 mt-4">
           <section>
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
           </section>
           <section>
             <h2 className="h5 fw-semibold">Contact</h2>
-            <p className="mb-0">For privacy questions, contact PM Advance Sdn Bhd at info@pmadvance.com.</p>
+            <p className="mb-0">For privacy questions, contact PM Exam Pro at info@pmadvance.com.</p>
           </section>
         </div>
       </section>

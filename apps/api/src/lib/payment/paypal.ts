@@ -99,7 +99,7 @@ export const paypalProvider: PaymentProvider = {
           },
         ],
         application_context: {
-          brand_name: "PM Advance",
+          brand_name: "PM Exam Pro",
           user_action: "PAY_NOW",
           return_url: request.returnUrl,
           cancel_url: `${request.returnUrl}&status_id=3`,

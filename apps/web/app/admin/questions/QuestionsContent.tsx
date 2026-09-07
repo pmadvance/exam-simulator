@@ -524,8 +524,8 @@ export function QuestionsContent({ initialQuestions, products, exams }: Question
                   <input className="form-control form-control-sm" list="eco-domain-suggestions" placeholder="e.g. People, Process" value={questionForm.ecoDomain} onChange={(e) => setQuestionForm({ ...questionForm, ecoDomain: e.target.value })} />
                 </div>
                 <div className="col-md-4">
-                  <label className="form-label small fw-semibold">Performance Domain</label>
-                  <input className="form-control form-control-sm" list="perf-domain-suggestions" placeholder="e.g. Team, Planning, Delivery" value={questionForm.performanceDomain} onChange={(e) => setQuestionForm({ ...questionForm, performanceDomain: e.target.value })} />
+                  <label className="form-label small fw-semibold">Delivery Approach</label>
+                  <input className="form-control form-control-sm" list="perf-domain-suggestions" placeholder="Predictive, Agile, Hybrid, or Agnostic" value={questionForm.performanceDomain} onChange={(e) => setQuestionForm({ ...questionForm, performanceDomain: e.target.value })} />
                 </div>
                 <div className="col-12">
                   <label className="form-label small fw-semibold">Question Prompt</label>

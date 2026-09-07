@@ -14,7 +14,7 @@ export function Footer() {
               <BrandLogo variant="dark" size="compact" />
             </Link>
             <p className="mb-2" style={{ maxWidth: 280 }}>
-              Practice exams and training for PMP®, CAPM®, PMI-RMP®, PMI-ACP® — built by PM Advance Sdn Bhd.
+              Practice exams and training for PMP®, CAPM®, PMI-RMP®, PMI-ACP® — built by PM Exam Pro.
             </p>
             <span
               className="d-inline-block px-2 py-1 rounded-1 small fw-semibold"
@@ -48,7 +48,7 @@ export function Footer() {
 
           {/* Contact */}
           <div className="col-lg-4 col-md-6">
-            <h6 className="text-white fw-semibold mb-3" style={{ fontSize: 13, letterSpacing: "0.04em" }}>PM Advance Sdn Bhd</h6>
+            <h6 className="text-white fw-semibold mb-3" style={{ fontSize: 13, letterSpacing: "0.04em" }}>PM Exam Pro</h6>
             <ul className="list-unstyled d-grid gap-2 mb-0">
               <li className="d-flex align-items-start gap-2">
                 <i className="bi bi-geo-alt-fill mt-1" style={{ color: "#E8792B", fontSize: 13 }} />
@@ -69,7 +69,7 @@ export function Footer() {
         {/* Bottom bar */}
         <hr style={{ borderColor: "#374151", margin: "24px 0 16px" }} />
         <div className="d-flex flex-wrap justify-content-between align-items-center gap-2" style={{ fontSize: 12 }}>
-          <span>&copy; {year} PM Advance Sdn Bhd. All rights reserved.</span>
+          <span>&copy; {year} PM Exam Pro. All rights reserved.</span>
           <span style={{ color: "#6B7280" }}>PMI, PMP, CAPM are registered marks of the Project Management Institute, Inc.</span>
         </div>
       </div>

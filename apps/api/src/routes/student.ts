@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2";
 import type { PoolConnection } from "mysql2/promise";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
+import { answersMatch } from "../scoring.js";
 import { env } from "../config.js";
 import { getPool } from "../db.js";
 import { sampleQuestions } from "../fixtures.js";
@@ -215,7 +216,6 @@ router.get("/exams/:slug/access", async (request, response, next) => {
       response.status(404).json({ message: "Exam not found" });
       return;
     }
-
     const databaseReady = await getDatabaseReady();
     if (!databaseReady) {
       response.json({ hasAccess: false });
@@ -294,6 +294,14 @@ router.get("/exams/:slug/in-progress", async (request, response, next) => {
         .filter((a) => a.examSlug === request.params.slug && a.status === "in_progress")
         .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
       response.json(match ?? null);
+      return;
+    }
+    if (exam.questionCount < 1) {
+      await getPool().execute(
+        `DELETE attempts FROM attempts INNER JOIN exams ON exams.id = attempts.exam_id WHERE attempts.user_id = ? AND exams.slug = ? AND attempts.status = 'in_progress'`,
+        [user.userId, request.params.slug]
+      );
+      response.json(null);
       return;
     }
 
@@ -420,6 +428,10 @@ router.post("/exams/:slug/attempts", async (request, response, next) => {
     const exam = await getExamBySlug(request.params.slug);
     if (!exam) {
       response.status(404).json({ message: "Exam not found" });
+      return;
+    }
+    if (exam.questionCount < 1) {
+      response.status(409).json({ message: "This exam is not ready yet because it has no published questions." });
       return;
     }
 
@@ -664,7 +676,7 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
       // For training mode, just calculate score without persisting
       const score = Object.entries(attempt.answers).reduce((total, [questionId, answer]) => {
         const question = sampleQuestions.find((item) => item.id === Number(questionId));
-        return total + (question?.correctAnswer === answer ? 1 : 0);
+        return total + (question && answersMatch(answer, question.correctAnswer) ? 1 : 0);
       }, 0);
 
       // Delete training mode attempts (don't persist since user saw answers)
@@ -701,7 +713,7 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
               questions.id AS questionId, questions.correct_answer AS correctAnswer, questions.question_type AS questionType
        FROM attempts
        INNER JOIN exams ON exams.id = attempts.exam_id
-       LEFT JOIN questions ON questions.exam_id = exams.id
+       LEFT JOIN questions ON questions.exam_id = exams.id AND questions.status = 'published'
        WHERE attempts.id = ? AND attempts.user_id = ?`,
       [request.params.id, user.userId]
     );
@@ -733,14 +745,7 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
       }
 
       const userAnswer = answers[String(row.questionId)] ?? "";
-      if (row.questionType === "multiple_response") {
-        // Compare as arrays: correct if user selected exactly the right options
-        const correctParts = row.correctAnswer.split(",").map(s => s.trim());
-        const userParts = userAnswer.split(",").map(s => s.trim()).filter(Boolean);
-        const match = correctParts.length === userParts.length && correctParts.every(c => userParts.includes(c));
-        return total + (match ? 1 : 0);
-      }
-      return total + (userAnswer === row.correctAnswer ? 1 : 0);
+      return total + (answersMatch(userAnswer, row.correctAnswer) ? 1 : 0);
     }, 0);
 
     // For training mode: delete the attempt (don't persist since user saw answers)
@@ -801,22 +806,13 @@ router.get("/attempts/:id/results", async (request, response, next) => {
               questions.option_e AS optionE, questions.correct_answer AS correctAnswer, questions.explanation
        FROM questions
        INNER JOIN exams ON exams.id = questions.exam_id
-       WHERE exams.slug = ?
+       WHERE exams.slug = ? AND questions.status = 'published'
        ORDER BY questions.id ASC`,
       [attempt.examSlug]
     );
     const questions = questionRows.map((q) => {
       const userAnswer = answers[String(q.id)] ?? null;
-      let isCorrect = false;
-      if (userAnswer && q.correctAnswer) {
-        if (q.questionType === "multiple_response") {
-          const correctParts = (q.correctAnswer as string).split(",").map((s: string) => s.trim());
-          const userParts = (userAnswer as string).split(",").map((s: string) => s.trim()).filter(Boolean);
-          isCorrect = correctParts.length === userParts.length && correctParts.every((c: string) => userParts.includes(c));
-        } else {
-          isCorrect = userAnswer === q.correctAnswer;
-        }
-      }
+      const isCorrect = Boolean(userAnswer && q.correctAnswer && answersMatch(userAnswer, q.correctAnswer as string));
       return {
         id: Number(q.id),
         questionType: q.questionType ?? "single_choice",
@@ -850,6 +846,7 @@ router.get("/attempts", async (request, response, next) => {
     const [rows] = await getPool().query<RowDataPacket[]>(
       `SELECT attempts.id, exams.slug AS examSlug, exams.title AS examTitle,
               attempts.status, attempts.score, attempts.total_questions AS totalQuestions,
+              exams.pass_threshold AS passThreshold,
               attempts.started_at AS startedAt, attempts.submitted_at AS submittedAt
        FROM attempts
        INNER JOIN exams ON exams.id = attempts.exam_id
@@ -862,6 +859,7 @@ router.get("/attempts", async (request, response, next) => {
       ...r,
       score: r.score !== null ? Number(r.score) : null,
       totalQuestions: Number(r.totalQuestions),
+      passThreshold: Number(r.passThreshold),
       startedAt: toIsoString(r.startedAt as Date | string),
       submittedAt: toIsoString(r.submittedAt as Date | string | null)
     })));
@@ -1012,7 +1010,7 @@ th{background:#f5f5f5;font-weight:600}
 </style></head><body>
 <div class="header">
   <div><h1>RECEIPT</h1><p style="margin:4px 0;color:#666">Receipt #${String(order.id).padStart(6, "0")}</p></div>
-  <div class="company"><strong>PM Advance Sdn Bhd</strong><br>Practice Exam Platform</div>
+  <div class="company"><strong>PM Exam Pro</strong><br>Practice Exam Platform</div>
 </div>
 <table>
   <tr><th>Date</th><td>${new Date(order.createdAt).toLocaleDateString("en-MY", { year: "numeric", month: "long", day: "numeric" })}</td></tr>
@@ -1066,17 +1064,22 @@ router.get("/performance", async (request, response, next) => {
       return;
     }
 
-    // 1) All submitted attempts for this user
+    const productSlug = typeof request.query.productSlug === "string" ? request.query.productSlug.trim() : "";
+
+    // 1) Submitted attempts for this user, optionally scoped to one purchased product.
     const [attemptRows] = await getPool().query<RowDataPacket[]>(
       `SELECT a.id, a.exam_id AS examId, a.score, a.total_questions AS totalQuestions,
               a.training_mode AS trainingMode, a.answers_json AS answersJson,
               a.started_at AS startedAt, a.submitted_at AS submittedAt,
-              e.slug AS examSlug, e.title AS examTitle, e.pass_threshold AS passThreshold
+              e.slug AS examSlug, e.title AS examTitle, e.pass_threshold AS passThreshold,
+              p.slug AS productSlug
        FROM attempts a
        INNER JOIN exams e ON e.id = a.exam_id
+       INNER JOIN products p ON p.id = e.product_id
        WHERE a.user_id = ? AND a.status = 'submitted'
+         AND (? = '' OR p.slug = ?)
        ORDER BY a.submitted_at ASC`,
-      [user.userId]
+      [user.userId, productSlug, productSlug]
     );
 
     // Build attempt list for Past Results & Overall trend
@@ -1103,6 +1106,7 @@ router.get("/performance", async (request, response, next) => {
     const examIds = [...new Set(attemptRows.map((r) => Number(r.examId)))];
     let ecoDomains: Array<{ domain: string; totalQuestions: number; correctAnswers: number; averageScore: number }> = [];
     let performanceDomains: Array<{ domain: string; totalQuestions: number; correctAnswers: number; averageScore: number }> = [];
+    const qMap = new Map<string, { correctAnswer: string; ecoDomain: string; performanceDomain: string }>();
 
     if (examIds.length > 0) {
       // Fetch all questions for those exams
@@ -1111,12 +1115,11 @@ router.get("/performance", async (request, response, next) => {
                 COALESCE(eco_domain, 'Uncategorized') AS ecoDomain,
                 COALESCE(performance_domain, 'Uncategorized') AS performanceDomain
          FROM questions
-         WHERE exam_id IN (${examIds.map(() => "?").join(",")})`,
+         WHERE exam_id IN (${examIds.map(() => "?").join(",")}) AND status = 'published'`,
         examIds
       );
 
       // Build question lookup: questionId → { correctAnswer, ecoDomain, performanceDomain }
-      const qMap = new Map<string, { correctAnswer: string; ecoDomain: string; performanceDomain: string }>();
       for (const q of questionRows) {
         qMap.set(String(q.id), { correctAnswer: q.correctAnswer, ecoDomain: q.ecoDomain, performanceDomain: q.performanceDomain });
       }
@@ -1130,7 +1133,7 @@ router.get("/performance", async (request, response, next) => {
         for (const [qId, selectedAnswer] of Object.entries(answers)) {
           const q = qMap.get(qId);
           if (!q) continue;
-          const isCorrect = selectedAnswer === q.correctAnswer;
+          const isCorrect = answersMatch(selectedAnswer, q.correctAnswer);
 
           // ECO domain (ecoDomain)
           const eco = ecoStats.get(q.ecoDomain) ?? { total: 0, correct: 0 };
@@ -1165,7 +1168,103 @@ router.get("/performance", async (request, response, next) => {
         .sort((a, b) => b.totalQuestions - a.totalQuestions);
     }
 
-    response.json({ attempts, ecoDomains, performanceDomains });
+    const examAttempts = attempts.filter((attempt) => !attempt.trainingMode);
+    const recentAttempts = examAttempts.slice(-5);
+    const recentWeightTotal = recentAttempts.reduce((sum, _attempt, index) => sum + index + 1, 0);
+    const recentAverage = recentAttempts.length
+      ? Math.round(recentAttempts.reduce((sum, attempt, index) => sum + attempt.scorePercent * (index + 1), 0) / recentWeightTotal)
+      : 0;
+    const recentFive = examAttempts.slice(-5);
+    const recentFiveAverage = recentFive.length
+      ? recentFive.reduce((sum, attempt) => sum + attempt.scorePercent, 0) / recentFive.length
+      : 0;
+    const variance = recentFive.length
+      ? recentFive.reduce((sum, attempt) => sum + Math.pow(attempt.scorePercent - recentFiveAverage, 2), 0) / recentFive.length
+      : 0;
+    const consistency = Math.max(0, Math.round(100 - Math.sqrt(variance) * 3));
+    const answeredQuestionIds = new Set<string>();
+    const firstSeenQuestionIds = new Set<string>();
+    let firstSeenTotal = 0;
+    let firstSeenCorrect = 0;
+    let answeredResponses = 0;
+    let expectedResponses = 0;
+    const incorrectCounts = new Map<string, number>();
+    for (const attempt of attemptRows) {
+      if (attempt.trainingMode) continue;
+      const attemptAnswers = parseJsonField<Record<string, string>>(attempt.answersJson, {});
+      expectedResponses += Number(attempt.totalQuestions ?? 0);
+      answeredResponses += Object.keys(attemptAnswers).length;
+      for (const [id, selectedAnswer] of Object.entries(attemptAnswers)) {
+        answeredQuestionIds.add(id);
+        const question = qMap.get(id);
+        if (!question) continue;
+        const correct = answersMatch(selectedAnswer, question.correctAnswer);
+        if (!firstSeenQuestionIds.has(id)) {
+          firstSeenQuestionIds.add(id);
+          firstSeenTotal += 1;
+          if (correct) firstSeenCorrect += 1;
+        }
+        if (!correct) incorrectCounts.set(id, (incorrectCounts.get(id) ?? 0) + 1);
+      }
+    }
+    const firstSeenAccuracy = firstSeenTotal > 0 ? Math.round((firstSeenCorrect / firstSeenTotal) * 100) : 0;
+    const unansweredRate = expectedResponses > 0 ? Math.max(0, Math.round(((expectedResponses - answeredResponses) / expectedResponses) * 100)) : 0;
+    const recurringMistakes = [...incorrectCounts.values()].filter((count) => count >= 2).length;
+    const availableQuestions = examIds.length > 0
+      ? await getPool().query<RowDataPacket[]>(
+          `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id IN (${examIds.map(() => "?").join(",")}) AND status = 'published'`,
+          examIds
+        ).then(([rows]) => Number(rows[0]?.questionCount ?? 0))
+      : 0;
+    const coveragePercent = availableQuestions > 0
+      ? Math.min(100, Math.round((answeredQuestionIds.size / availableQuestions) * 100))
+      : 0;
+    const scoredDomains = ecoDomains.filter((domain) => domain.totalQuestions >= 3);
+    const domainBalance = scoredDomains.length
+      ? Math.round(scoredDomains.reduce((sum, domain) => sum + domain.averageScore, 0) / scoredDomains.length)
+      : recentAverage;
+    const calculatedReadinessScore = examAttempts.length
+      ? Math.round(recentAverage * 0.45 + coveragePercent * 0.2 + consistency * 0.15 + domainBalance * 0.2)
+      : 0;
+    const weakAreas = ecoDomains
+      .filter((domain) => domain.totalQuestions >= 3 && domain.averageScore < 70)
+      .sort((a, b) => a.averageScore - b.averageScore)
+      .slice(0, 3)
+      .map((domain) => domain.domain);
+    const confidence = examAttempts.length >= 5 && coveragePercent >= 60
+      ? "high"
+      : examAttempts.length >= 2 && coveragePercent >= 25
+        ? "medium"
+        : "low";
+    const readinessEligible = examAttempts.length >= 2 && coveragePercent >= 25;
+    const recommendations = examAttempts.length === 0
+      ? ["Complete an exam-mode attempt to establish your baseline."]
+      : [
+          ...(weakAreas.length ? [`Focus your next study session on ${weakAreas.join(", ")}.`] : ["Maintain your domain balance with mixed practice."]),
+          ...(coveragePercent < 60 ? ["Answer more unique questions to improve coverage and confidence."] : []),
+          ...(recentAverage < 75 ? ["Aim for at least 75% across three recent exam-mode attempts."] : ["Your recent scores are on track; practise under full timed conditions."]),
+        ];
+
+    response.json({
+      attempts,
+      ecoDomains,
+      performanceDomains,
+      readiness: {
+        score: readinessEligible ? calculatedReadinessScore : null,
+        eligible: readinessEligible,
+        confidence,
+        recentAverage,
+        firstSeenAccuracy,
+        coveragePercent,
+        consistency,
+        domainBalance,
+        unansweredRate,
+        recurringMistakes,
+        weakAreas,
+        recommendations,
+        examAttemptCount: examAttempts.length,
+      },
+    });
   } catch (error) {
     next(error);
   }

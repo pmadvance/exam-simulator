@@ -80,6 +80,8 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
   const [reviewFilter, setReviewFilter] = useState<"all" | "answered" | "unanswered" | "marked">("all");
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "offline" | "failed">("saved");
+  const [showGuide, setShowGuide] = useState(false);
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoNextRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerActiveRef = useRef(false);
@@ -124,6 +126,23 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     document.body.classList.toggle("pm-exam-fullscreen", activeFullscreenExam);
     return () => document.body.classList.remove("pm-exam-fullscreen");
   }, [isFullscreen, attempt, result]);
+
+  useEffect(() => {
+    setShowGuide(localStorage.getItem("pm-exam-simulator-guide-seen") !== "yes");
+    function online() { setSaveState("saving"); setStatusMessage("Connection restored. Saving your latest progress…"); setAnswers((current) => ({ ...current })); }
+    function offline() { setSaveState("offline"); setStatusMessage("You are offline. Keep this page open; progress will retry when reconnected."); }
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (attempt && !result && saveState !== "saved") { event.preventDefault(); event.returnValue = ""; }
+    }
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => {
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
+  }, [attempt, result, saveState]);
 
   // ─── Anti-cheating: block copy/paste/cut and right-click during active exam ───
   useEffect(() => {
@@ -271,14 +290,17 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
   useEffect(() => {
     if (!attempt || result) return;
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    setSaveState(navigator.onLine ? "saving" : "offline");
     autoSaveRef.current = setTimeout(async () => {
+      if (!navigator.onLine) return;
       try {
         await browserApiFetch<AttemptState>(`/api/attempts/${attempt.id}/progress`, {
           method: "PATCH",
           body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview) })
         });
+        setSaveState("saved");
       } catch {
-        // silent
+        setSaveState(navigator.onLine ? "failed" : "offline");
       }
     }, 500);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
@@ -286,6 +308,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
 
   async function startAttempt() {
     if (hasAccess !== true) { setStatusMessage("Active enrollment required."); return; }
+    if (questionCount < 1) { setStatusMessage("This exam is not ready yet because it has no published questions."); return; }
     setBusy(true);
     setResult(null);
     setShowStartScreen(false);
@@ -564,7 +587,8 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
           <p className="explanation">Submitted at {new Date(result.submittedAt).toLocaleString()}</p>
         </div>
         <div className="simulatorActions">
-          <a href={`/attempts/${result.attemptId}`} className="cta buttonCta">Review answers</a>
+          {!attempt?.trainingMode && <a href={`/attempts/${result.attemptId}`} className="cta buttonCta">Review answers</a>}
+          {attempt?.trainingMode && <a href="/me/exams" className="cta buttonCta">Continue training</a>}
           <a href="/me/dashboard" className="secondaryButton">Dashboard</a>
         </div>
       </section>
@@ -660,6 +684,12 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
             </button>
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <button className="secondaryButton" type="button" onClick={() => setShowGuide((value) => !value)} aria-expanded={showGuide}>
+              <i className="bi bi-question-circle me-1" />Help
+            </button>
+            <span className="statusLine" role="status" aria-live="polite" style={{ margin: 0, fontSize: 12 }}>
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "offline" ? "Offline — not saved" : "Save failed — retrying"}
+            </span>
             {!activeTrainingMode && (
               <span className="statusLine" style={{ margin: 0, fontSize: 12 }}>
                 Auto-forward: {autoForward ? "ON" : "OFF"}
@@ -673,6 +703,16 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
             ) : null}
           </div>
         </div>
+
+        {showGuide && (
+          <div className="alert alert-info d-flex align-items-start gap-2" role="region" aria-label="Simulator guide">
+            <i className="bi bi-info-circle mt-1" />
+            <div className="small flex-grow-1">
+              <strong>Simulator guide:</strong> choose Training Mode before starting for untimed feedback. Use Strikethrough to eliminate an option, Highlight to emphasize text, Mark for review to revisit a question, and Save and Exit to continue later. In exam mode, the test submits automatically when time reaches zero.
+            </div>
+            <button className="btn-close" type="button" aria-label="Dismiss simulator guide" onClick={() => { localStorage.setItem("pm-exam-simulator-guide-seen", "yes"); setShowGuide(false); }} />
+          </div>
+        )}
 
         <div className="questionCard" {...swipeHandlers}>
           <div className="swipe-hint">
@@ -732,14 +772,14 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
                     <span>{option.text}</span>
                   </button>
                   <button type="button" onClick={() => toggleStrikethrough(qid, option.originalKey)}
-                    title="Toggle strikethrough"
+                    aria-label={`${isStruck ? "Remove strikethrough from" : "Strikethrough"} option ${option.displayLabel}`}
                     style={{ background: "none", border: "1px solid var(--line)", borderRadius: 4, padding: "4px 6px", cursor: "pointer", fontSize: 11, textDecoration: isStruck ? "line-through" : "none" }}>
-                    S
+                    <i className="bi bi-type-strikethrough me-1" />Strike
                   </button>
                   <button type="button" onClick={() => toggleOptionHighlight(qid, option.originalKey)}
-                    title="Toggle option highlight"
+                    aria-label={`${isHighlighted ? "Remove highlight from" : "Highlight"} option ${option.displayLabel}`}
                     style={{ background: isHighlighted ? "#FEF3C7" : "none", border: "1px solid var(--line)", borderRadius: 4, padding: "4px 6px", cursor: "pointer", fontSize: 11 }}>
-                    H
+                    <i className="bi bi-highlighter me-1" />Highlight
                   </button>
                 </div>
               );
@@ -830,7 +870,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
             </button>
           )}
         </div>
-        <p className="statusLine">{statusMessage}</p>
+        <p className="statusLine" role="status" aria-live="polite">{statusMessage}</p>
       </section>
     );
   }
@@ -856,24 +896,25 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
       {hasAccess === true && showStartScreen && (
         <div className="questionCard" style={{ marginTop: 24 }}>
           <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <h2 style={{ margin: "8px 0" }}>Ready to start?</h2>
+            <h2 style={{ margin: "8px 0" }}>{questionCount > 0 ? "Ready to start?" : "This exam is being prepared"}</h2>
             <p style={{ color: "var(--muted)", maxWidth: 420, margin: "12px auto" }}>
-              You have {questionCount} questions and {timeLimitMinutes} minutes. 
-              Configure your preferences below.
+              {questionCount > 0
+                ? `You have ${questionCount} questions and ${timeLimitMinutes} minutes. The timer starts only after you select Start Exam.`
+                : "There are no published questions available yet. Please check back soon."}
             </p>
-            <div style={{ margin: "20px auto", maxWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
+            {questionCount > 0 && <div style={{ margin: "20px auto", maxWidth: 340, display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", justifyContent: "center" }}>
                 <input type="checkbox" checked={trainingMode} onChange={() => setTrainingMode(!trainingMode)} />
-                <span style={{ fontSize: 14 }}>Training mode (submit to reveal feedback)</span>
+                <span style={{ fontSize: 14 }}>Training mode — untimed, with feedback after each answer</span>
               </label>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", justifyContent: "center" }}>
                 <input type="checkbox" checked={autoForward} onChange={() => setAutoForward(!autoForward)} />
                 <span style={{ fontSize: 14 }}>Auto-advance to next question</span>
               </label>
-            </div>
-            <button className="cta buttonCta" type="button" onClick={startAttempt} disabled={busy}>
-              {busy ? "Starting..." : "Start Exam"}
-            </button>
+            </div>}
+            {questionCount > 0 && <button className="cta buttonCta" type="button" onClick={startAttempt} disabled={busy}>
+              {busy ? "Starting..." : trainingMode ? "Start Training" : "Start Exam"}
+            </button>}
           </div>
         </div>
       )}
@@ -924,6 +965,24 @@ function SubmissionConfirmDialog({
   onConfirm: () => void;
 }) {
   const hasUnanswered = unansweredCount > 0;
+  const continueButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    continueButtonRef.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busy) onCancel();
+      if (event.key !== "Tab") return;
+      const modal = continueButtonRef.current?.closest("[role=dialog]");
+      const focusable = Array.from(modal?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? []);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [busy, onCancel]);
 
   return (
     <div className="submissionModalOverlay" role="presentation">
@@ -938,7 +997,7 @@ function SubmissionConfirmDialog({
             : "All questions have been answered. Are you sure you want to submit the test?"}
         </p>
         <div className="submissionModalActions">
-          <button className="secondaryButton" type="button" onClick={onCancel} disabled={busy}>
+          <button ref={continueButtonRef} className="secondaryButton" type="button" onClick={onCancel} disabled={busy}>
             Continue test
           </button>
           <button className="cta buttonCta" type="button" onClick={onConfirm} disabled={busy}>
@@ -1144,10 +1203,10 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
       <div className="questionCard" style={{ marginTop: 24 }}>
         <div style={{ textAlign: "center", padding: "24px 0" }}>
           <h2 style={{ margin: "8px 0" }}>
-            Try {trialQuestions.length} sample questions
+            {trialQuestions.length}-question preview · 1-minute demo
           </h2>
           <p style={{ color: "var(--muted)", maxWidth: 420, margin: "12px auto" }}>
-            Experience the full simulator with timer, navigation, and review — just like the real exam.
+            Explore the simulator controls with sample questions. This short preview is separate from the full exam and is not included in your statistics.
           </p>
           <div style={{ margin: "16px auto", maxWidth: 280, display: "flex", flexDirection: "column", gap: 12 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", justifyContent: "center" }}>

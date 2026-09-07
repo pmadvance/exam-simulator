@@ -177,7 +177,9 @@ export function StudentDashboardScreen({ initialEnrollments, initialAttempts, in
     const avg = scores.length ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : 0;
     const best = scores.length ? Math.max(...scores) : 0;
     const latest = filteredSubmitted.length ? filteredSubmitted[0] : null;
-    const passRate = scores.length ? Math.round((scores.filter((s) => s >= 65).length / scores.length) * 100) : 0;
+    const passRate = filteredSubmitted.length
+      ? Math.round((filteredSubmitted.filter((attempt) => pct(attempt.score, attempt.totalQuestions) >= attempt.passThreshold).length / filteredSubmitted.length) * 100)
+      : 0;
     return { avg, best, latest, completedCount: filteredSubmitted.length, passRate };
   }, [filteredSubmitted]);
 
@@ -391,7 +393,7 @@ export function StudentDashboardScreen({ initialEnrollments, initialAttempts, in
                       <tbody>
                         {filteredSubmitted.slice(0, 10).map((a) => {
                           const scorePct = pct(a.score, a.totalQuestions);
-                          const isPass = scorePct >= 65;
+                          const isPass = scorePct >= a.passThreshold;
                           return (
                             <tr key={a.id}>
                               <td className="ps-4">
@@ -496,7 +498,7 @@ export function StudentDashboardScreen({ initialEnrollments, initialAttempts, in
                   <h6 className="fw-bold mb-3" style={{ color: "#1A1D23", fontSize: 14 }}>Latest Score</h6>
                   <div className="d-flex align-items-center justify-content-between mb-2">
                     <span style={{ fontSize: 13, color: "#6B7280" }}>{stats.latest.examTitle}</span>
-                    <span className="fw-bold" style={{ fontSize: 18, color: pct(stats.latest.score, stats.latest.totalQuestions) >= 65 ? "#059669" : "#DC2626" }}>
+                    <span className="fw-bold" style={{ fontSize: 18, color: pct(stats.latest.score, stats.latest.totalQuestions) >= stats.latest.passThreshold ? "#059669" : "#DC2626" }}>
                       {pct(stats.latest.score, stats.latest.totalQuestions)}%
                     </span>
                   </div>
@@ -506,7 +508,7 @@ export function StudentDashboardScreen({ initialEnrollments, initialAttempts, in
                       role="progressbar"
                       style={{
                         width: `${pct(stats.latest.score, stats.latest.totalQuestions)}%`,
-                        background: pct(stats.latest.score, stats.latest.totalQuestions) >= 65 ? "#059669" : "#DC2626",
+                        background: pct(stats.latest.score, stats.latest.totalQuestions) >= stats.latest.passThreshold ? "#059669" : "#DC2626",
                         borderRadius: 3,
                       }}
                     />

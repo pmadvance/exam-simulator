@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "./password-policy.js";
 
 export const profileGenderSchema = z.enum(["female", "male", "non_binary", "prefer_not_to_say", "other"]);
 
@@ -11,15 +12,14 @@ export const optionalProfileFieldsSchema = {
 export const registerSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2),
-  password: z.string().min(8),
-  ...optionalProfileFieldsSchema,
+  password: passwordSchema,
   verificationCode: z.string().length(6),
   privacyAccepted: z.literal(true)
 });
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(1),
   rememberMe: z.boolean().optional().default(false)
 });
 
@@ -38,8 +38,7 @@ export const guestCheckoutSchema = z.object({
   provider: z.enum(["toyyibpay", "stripe", "paypal", "billplz"]).default("toyyibpay"),
   fullName: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(8),
-  ...optionalProfileFieldsSchema,
+  password: passwordSchema,
   verificationCode: z.string().min(4).max(6),
   voucherCode: z.string().optional(),
   referralCode: z.string().trim().min(4).max(32).optional(),

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { browserApiFetch } from "../../../lib/api";
+import { PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENT_MESSAGE, isValidPassword } from "../../../lib/password-policy";
 
 type ResetPasswordResponse = {
   message: string;
@@ -18,7 +19,7 @@ export function ResetPasswordScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Set a new password with at least 8 characters.");
+  const [statusMessage, setStatusMessage] = useState(PASSWORD_REQUIREMENT_MESSAGE);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,6 +29,10 @@ export function ResetPasswordScreen() {
     }
     if (password !== confirmPassword) {
       setStatusMessage("Passwords do not match.");
+      return;
+    }
+    if (!isValidPassword(password)) {
+      setStatusMessage(PASSWORD_REQUIREMENT_MESSAGE);
       return;
     }
 
@@ -54,7 +59,7 @@ export function ResetPasswordScreen() {
             <i className="bi bi-lock-fill fs-4" style={{ color: "#E8792B" }} />
           </div>
           <h4 className="fw-bold mb-1" style={{ color: "#1A1D23", letterSpacing: "-0.02em" }}>Choose a new password</h4>
-          <p style={{ color: "#6B7280", fontSize: 14 }}>Set a new password with at least 8 characters</p>
+          <p style={{ color: "#6B7280", fontSize: 14 }}>{PASSWORD_REQUIREMENT_MESSAGE}</p>
         </div>
 
         <div className="card" style={{ border: "1px solid #E5E7EB" }}>
@@ -68,7 +73,8 @@ export function ResetPasswordScreen() {
                   className="form-control"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  minLength={8}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
                   required
                 />
               </div>
@@ -80,7 +86,8 @@ export function ResetPasswordScreen() {
                   className="form-control"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  minLength={8}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
                   required
                 />
               </div>

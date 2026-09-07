@@ -87,6 +87,7 @@ export type LoginResponse = {
     email: string;
     fullName: string;
     role: string;
+    needsOnboarding?: boolean;
   };
 };
 
@@ -174,6 +175,7 @@ export type AttemptHistoryItem = {
   status: string;
   score: number | null;
   totalQuestions: number;
+  passThreshold: number;
   startedAt: string;
   submittedAt: string | null;
 };

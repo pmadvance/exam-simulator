@@ -10,7 +10,7 @@ export default function TermsPage() {
           Legal
         </p>
         <h1 className="fw-bold mb-3">Terms of Use</h1>
-        <p className="text-muted">Version 2026-05-26. These terms apply to use of the PM Advance practice exam platform.</p>
+        <p className="text-muted">Version 2026-05-26. These terms apply to use of the PM Exam Pro practice exam platform.</p>
 
         <div className="d-grid gap-4 mt-4">
           <section>

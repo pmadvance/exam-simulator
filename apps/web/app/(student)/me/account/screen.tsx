@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { browserApiFetch, type StudentOrder, type EnrollmentSummary } from "../../../../lib/api";
 import { useToast } from "../../../../app/components/Toast";
+import { PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENT_MESSAGE, isValidPassword } from "../../../../lib/password-policy";
 
 type Props = {
   initialOrders: StudentOrder[];
@@ -23,7 +24,6 @@ const TEAL = "#2B7A87";
 const INK = "#1A1D23";
 const MUTED = "#6B7280";
 const SUCCESS = "#059669";
-const PASSWORD_REQUIREMENTS = /^(?=.*[A-Za-z])(?=.*\d).+$/;
 
 export function AccountScreen({ initialOrders, initialReferral }: Props) {
   const [orders] = useState(initialOrders);
@@ -104,8 +104,8 @@ export function AccountScreen({ initialOrders, initialReferral }: Props) {
     setStatus("");
     try {
       if (newPassword.trim()) {
-        if (!PASSWORD_REQUIREMENTS.test(newPassword)) {
-          const message = "New password must contain both letters and numbers.";
+        if (!isValidPassword(newPassword)) {
+          const message = PASSWORD_REQUIREMENT_MESSAGE;
           setStatus(message);
           toast(message, "warning");
           return;
@@ -287,6 +287,7 @@ export function AccountScreen({ initialOrders, initialReferral }: Props) {
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Required to change password"
+                  autoComplete="current-password"
                 />
               </div>
 
@@ -301,9 +302,11 @@ export function AccountScreen({ initialOrders, initialReferral }: Props) {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Leave blank to keep current"
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
                 />
                 <div className="form-text" style={{ color: MUTED, fontSize: 12 }}>
-                  Use at least 8 characters with both letters and numbers.
+                  {PASSWORD_REQUIREMENT_MESSAGE}
                 </div>
               </div>
 
@@ -317,6 +320,8 @@ export function AccountScreen({ initialOrders, initialReferral }: Props) {
                   type="password"
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  minLength={PASSWORD_MIN_LENGTH}
+                  autoComplete="new-password"
                   placeholder="Re-enter new password"
                 />
               </div>

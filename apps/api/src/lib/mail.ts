@@ -54,10 +54,10 @@ export async function sendMail(to: string, subject: string, html: string) {
 
 export function verificationCodeEmail(code: string) {
   return {
-    subject: "Your PMAdvance verification code",
+    subject: "Your PM Exam Pro verification code",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #1a56db;">PMAdvance</h2>
+        <h2 style="color: #1a56db;">PM Exam Pro</h2>
         <p>Your email verification code is:</p>
         <div style="font-size: 32px; font-weight: bold; letter-spacing: 6px; text-align: center; padding: 20px; background: #f0f4ff; border-radius: 8px; margin: 16px 0;">${code}</div>
         <p style="color: #666; font-size: 14px;">This code expires in 10 minutes. If you didn't request this, please ignore this email.</p>
@@ -68,10 +68,10 @@ export function verificationCodeEmail(code: string) {
 
 export function passwordResetEmail(resetUrl: string) {
   return {
-    subject: "Reset your PMAdvance password",
+    subject: "Reset your PM Exam Pro password",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="color: #1a56db;">PMAdvance</h2>
+        <h2 style="color: #1a56db;">PM Exam Pro</h2>
         <p>We received a request to reset your password. Click the button below to set a new password:</p>
         <div style="text-align: center; margin: 24px 0;">
           <a href="${resetUrl}" style="display: inline-block; padding: 12px 32px; background: #1a56db; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600;">Reset Password</a>

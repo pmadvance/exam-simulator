@@ -9,8 +9,8 @@ export default async function PerfDomainsPage() {
 
   return (
     <>
-      <h1 className="page-title">Performance Domains</h1>
-      <p className="page-subtitle">PMI Performance Domains for detailed question categorization</p>
+      <h1 className="page-title">Delivery Approaches</h1>
+      <p className="page-subtitle">Classify questions as Predictive, Agile, Hybrid, or Agnostic for useful learner analytics.</p>
       <PerfDomainsContent initialDomains={domains} products={products} />
     </>
   );

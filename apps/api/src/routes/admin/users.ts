@@ -6,6 +6,7 @@ import { hasActiveEnrollment, writeAuditLog, toMySQLDatetime } from "../../helpe
 import { enrollmentExtendSchema, reconcileSchema, voucherCreateSchema } from "../../schemas.js";
 import { sendMail } from "../../lib/mail.js";
 import { z } from "zod";
+import { isValidPassword, passwordSchema } from "../../password-policy.js";
 
 const router = Router();
 
@@ -146,15 +147,15 @@ router.patch("/users/:id/status", async (request, response, next) => {
 
 function generateRandomPassword(length = 14): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-  let out = "";
-  for (let i = 0; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  let out = "Aa1!";
+  for (let i = out.length; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
 
 const userCreateSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2),
-  password: z.string().min(8).optional(),
+  password: passwordSchema.optional(),
   role: z.enum(["student", "admin", "content_admin", "support_admin"]).default("student"),
   productSlug: z.string().optional(),
   accessDays: z.coerce.number().int().positive().optional(),
@@ -319,8 +320,8 @@ function parseUserCsv(csv: string): { records: BulkUserRow[]; errors: Array<{ ro
     const password = idx.password !== undefined ? (cols[idx.password] || "").trim() : "";
     const productSlugs = idx.productSlug !== undefined ? splitProductSlugs(cols[idx.productSlug] || "") : [];
     const accessDaysRaw = idx.accessDays !== undefined ? (cols[idx.accessDays] || "").trim() : "";
-    if (password && password.length < 8) {
-      errors.push({ row: rowNum, reason: "password must be at least 8 characters, or leave it blank to auto-generate" });
+    if (password && !isValidPassword(password)) {
+      errors.push({ row: rowNum, reason: "password must have at least 8 characters with a letter and number, or be blank for auto-generation" });
       return;
     }
     let accessDays: number | null = null;
@@ -896,7 +897,7 @@ router.post("/vouchers/:id/send-email", async (request, response, next) => {
     const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:auto;">
   <h2 style="color:#E8792B;">You've received a discount voucher!</h2>
-  <p>Here is your exclusive voucher code for <strong>PM Advance</strong>:</p>
+  <p>Here is your exclusive voucher code for <strong>PM Exam Pro</strong>:</p>
   <div style="text-align:center;padding:20px;background:#f8f8f8;border-radius:8px;margin:20px 0;">
     <span style="font-size:2rem;font-weight:bold;letter-spacing:4px;font-family:monospace;color:#222;">${String(v.code)}</span>
   </div>
@@ -905,14 +906,14 @@ router.post("/vouchers/:id/send-email", async (request, response, next) => {
   <p style="margin:0 0 8px"><strong>Valid until:</strong> ${expiry}</p>
   ${customMsg}
   <hr style="margin:24px 0;border:none;border-top:1px solid #eee;">
-  <p style="font-size:12px;color:#aaa;">Apply this code at checkout on <a href="https://pmadvance.com.my" style="color:#E8792B;">pmadvance.com.my</a>.</p>
+  <p style="font-size:12px;color:#aaa;">Apply this code at checkout on <a href="https://pmexampro.com" style="color:#E8792B;">PM Exam Pro</a>.</p>
 </div>`;
 
     const sent: string[] = [];
     const failed: string[] = [];
     for (const email of emails) {
       try {
-        await sendMail(email, `Your PM Advance Voucher: ${String(v.code)}`, html);
+        await sendMail(email, `Your PM Exam Pro Voucher: ${String(v.code)}`, html);
         sent.push(email);
       } catch {
         failed.push(email);

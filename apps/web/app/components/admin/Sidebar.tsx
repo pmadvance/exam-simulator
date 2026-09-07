@@ -37,7 +37,7 @@ const sidebarSections: SidebarSection[] = [
       { key: "questions", label: "Questions", icon: "bi-question-circle", href: "/admin/questions" },
       { key: "assets", label: "Assets", icon: "bi-images", href: "/admin/assets" },
       { key: "eco-domains", label: "ECO Domains", icon: "bi-diagram-3", href: "/admin/eco-domains" },
-      { key: "perf-domains", label: "Performance Domains", icon: "bi-bullseye", href: "/admin/perf-domains" },
+      { key: "perf-domains", label: "Delivery Approaches", icon: "bi-bullseye", href: "/admin/perf-domains" },
     ],
   },
   {

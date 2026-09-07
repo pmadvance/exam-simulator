@@ -17,6 +17,7 @@ import { z } from "zod";
 import express from "express";
 
 const router = Router();
+const isDevelopmentUat = process.env.NODE_ENV !== "production" && env.UAT_TEST_MODE;
 
 type PaymentFinalizationInput = {
   orderId: number;
@@ -312,7 +313,7 @@ router.post("/checkout/register-and-pay", async (request, response, next) => {
         provider: z.enum(["toyyibpay", "stripe", "paypal", "billplz"]).default("toyyibpay"),
       }).parse(request.body);
 
-      if (!(env.UAT_TEST_MODE && provider === "toyyibpay")) {
+      if (!(isDevelopmentUat && provider === "toyyibpay")) {
         try {
           await assertGatewayReady(provider);
         } catch (error) {
@@ -361,7 +362,7 @@ router.post("/checkout/register-and-pay", async (request, response, next) => {
     } else {
       // Guest — register first
       const payload = guestCheckoutSchema.parse(request.body);
-      if (!(env.UAT_TEST_MODE && payload.provider === "toyyibpay")) {
+      if (!(isDevelopmentUat && payload.provider === "toyyibpay")) {
         try {
           await assertGatewayReady(payload.provider);
         } catch (error) {
@@ -370,7 +371,7 @@ router.post("/checkout/register-and-pay", async (request, response, next) => {
         }
       }
 
-      const isUatBypass = env.UAT_TEST_MODE && payload.verificationCode === env.UAT_VERIFICATION_CODE;
+      const isUatBypass = isDevelopmentUat && Boolean(env.UAT_VERIFICATION_CODE) && payload.verificationCode === env.UAT_VERIFICATION_CODE;
 
       if (!isUatBypass) {
         const [codeRows] = await getPool().query<RowDataPacket[]>(
@@ -420,14 +421,11 @@ router.post("/checkout/register-and-pay", async (request, response, next) => {
 
       const passwordHash = await bcrypt.hash(payload.password, 10);
       const [userResult] = await getPool().execute(
-        `INSERT INTO users (email, full_name, age, occupation, gender, password_hash, privacy_accepted_at, privacy_notice_version, terms_accepted_at, terms_version)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, '2026-05-26', CURRENT_TIMESTAMP, '2026-05-26')`,
+        `INSERT INTO users (email, full_name, password_hash, privacy_accepted_at, privacy_notice_version, terms_accepted_at, terms_version)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, '2026-05-26', CURRENT_TIMESTAMP, '2026-05-26')`,
         [
           payload.email,
           payload.fullName,
-          payload.age ?? null,
-          payload.occupation || null,
-          payload.gender ?? null,
           passwordHash
         ]
       );
@@ -833,7 +831,7 @@ async function createBulkOrdersAndBill(
   const callbackUrl = `${env.API_BASE_URL}/api/payments/callbacks/${provider.name}`;
   const returnUrl = `${env.APP_URL}/checkout/result?order_id=${primaryOrderId}`;
 
-  if (env.UAT_TEST_MODE && provider.name === "toyyibpay") {
+  if (isDevelopmentUat && provider.name === "toyyibpay") {
     const billCode = `UAT-${primaryOrderId}-${Date.now()}`;
     for (const oid of orderIds) {
       await getPool().execute(
@@ -866,7 +864,7 @@ async function createBulkOrdersAndBill(
 
   const billDescription = products.length === 1
     ? products[0].title
-    : `${products.length} items from PM Advance`;
+    : `${products.length} items from PM Exam Pro`;
 
   const bill = await provider.createBill({
     orderId: primaryOrderId,
