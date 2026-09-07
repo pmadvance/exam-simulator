@@ -87,6 +87,18 @@ The current free-text values are retained in this release to avoid guessing at a
 
 The build logs contain expected Next.js dynamic-route notices when the local API is not running; the build itself succeeds.
 
+## Deployment record
+
+- Release commit: `1b46cb4` (`Implement first-round learner journey remediation`)
+- Git remote: `origin/main`
+- Exabytes checkout: `/home/deploy/pm`, fast-forwarded cleanly from `75a67dd` to `1b46cb4`
+- Production build: successful on the Exabytes host
+- PM2: two `pm-api` workers and one `pm-web` process online after reload
+- Post-deployment checks: canonical homepage, `/health`, `/login`, and `/icon.svg` returned HTTP 200
+- Health state: database ready; required Redis configured and ready
+- Maintenance state at verification: off
+- Recent logs: no new application error after deployment; older retained log entries predate this release
+
 ## Deliberately deferred or dependent work
 
 - All payment findings listed in the source plan remain deferred.
