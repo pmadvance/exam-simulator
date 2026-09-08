@@ -14,7 +14,7 @@ export function Footer() {
               <BrandLogo variant="dark" size="compact" />
             </Link>
             <p className="mb-2" style={{ maxWidth: 280 }}>
-              Practice exams and training for PMP®, CAPM®, PMI-RMP®, PMI-ACP® — built by PM Exam Pro.
+              Project management certification practice and training built by PM Exam Pro.
             </p>
             <span
               className="d-inline-block px-2 py-1 rounded-1 small fw-semibold"
@@ -56,7 +56,7 @@ export function Footer() {
               </li>
               <li className="d-flex align-items-start gap-2">
                 <i className="bi bi-envelope-fill mt-1" style={{ color: "#E8792B", fontSize: 13 }} />
-                <span>info@pmadvance.com</span>
+                <span>info@pmexampro.com</span>
               </li>
               <li className="d-flex align-items-start gap-2">
                 <i className="bi bi-award-fill mt-1" style={{ color: "#E8792B", fontSize: 13 }} />

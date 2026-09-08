@@ -6,6 +6,7 @@ export type AttemptRecord = {
   startedAt: string;
   answers: Record<string, string>;
   markedForReview: string[];
+  questionTimings: Record<string, number>;
   trainingMode: boolean;
   status: string;
   submittedAt?: string | null;
@@ -29,6 +30,7 @@ export type ExamRow = RowDataPacket & {
   title: string;
   timeLimitMinutes: number;
   passThreshold: number;
+  examType?: "quiz" | "section" | "full_simulation";
   questionCount: number;
   status: string;
   productSlug?: string;
@@ -36,6 +38,7 @@ export type ExamRow = RowDataPacket & {
 
 export type QuestionPreviewRow = RowDataPacket & {
   id: number;
+  questionType: "single_choice" | "multiple_response" | "true_false";
   prompt: string;
   optionA: string;
   optionB: string;
@@ -43,6 +46,7 @@ export type QuestionPreviewRow = RowDataPacket & {
   optionD: string;
   optionE: string;
   explanation: string;
+  correctAnswer: string;
 };
 
 export type AttemptRow = RowDataPacket & {
@@ -51,6 +55,8 @@ export type AttemptRow = RowDataPacket & {
   startedAt: Date | string;
   answersJson: string;
   markedForReviewJson: string;
+  questionTimingsJson?: string | null;
+  questionsSnapshotJson?: string | null;
   trainingMode: number;
   status: string;
   submittedAt: Date | string | null;

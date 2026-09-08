@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SkeletonPerformance } from "../../../../app/components/Skeleton";
 import {
@@ -46,6 +46,8 @@ type DomainStat = {
   totalQuestions: number;
   correctAnswers: number;
   averageScore: number;
+  confidence?: "insufficient" | "developing" | "established";
+  blueprintWeight?: number;
 };
 
 type PerformanceData = {
@@ -58,14 +60,28 @@ type PerformanceData = {
     confidence: "low" | "medium" | "high";
     recentAverage: number;
     firstSeenAccuracy: number;
+    smoothedFirstSeenAccuracy: number;
+    firstSeenQuestionCount: number;
     coveragePercent: number;
     consistency: number;
-    domainBalance: number;
+    blueprintMastery: number;
+    blueprintCoverage: number;
+    classificationCoverage: number;
     unansweredRate: number;
-    recurringMistakes: number;
+    repeatRate: number;
+    recurringMistakes: Array<{ questionId: string; count: number; ecoDomain: string | null }>;
     weakAreas: string[];
     recommendations: string[];
     examAttemptCount: number;
+    fullSimulationCount: number;
+    distinctFullSimulationCount: number;
+    averageDurationMinutes: number;
+    averageSecondsPerQuestion: number | null;
+    targetSecondsPerQuestion: number | null;
+    paceStatus: "insufficient" | "behind" | "rushing" | "on_track";
+    stamina: Array<{ label: string; questionCount: number; accuracy: number | null }>;
+    staminaEvidenceCount: number;
+    formula: string;
   };
 };
 
@@ -119,7 +135,7 @@ function DomainTable({ domains, label }: { domains: DomainStat[]; label: string 
             let ranking = "Needs Work";
             let rankColor = DANGER;
             if (d.averageScore >= 80) { ranking = "Strong"; rankColor = SUCCESS; }
-            else if (d.averageScore >= 65) { ranking = "Average"; rankColor = WARNING; }
+            else if (d.averageScore >= 70) { ranking = "Developing"; rankColor = WARNING; }
 
             return (
               <tr key={d.domain}>
@@ -135,7 +151,10 @@ function DomainTable({ domains, label }: { domains: DomainStat[]; label: string 
                 <td className="text-center">{d.totalQuestions}</td>
                 <td className="text-center">{d.correctAnswers}</td>
                 <td className="text-center">
-                  <span className="badge" style={{ background: rankColor, fontSize: 11 }}>{ranking}</span>
+                  <div className="d-flex flex-column align-items-center gap-1">
+                    <span className="badge" style={{ background: rankColor, fontSize: 11 }}>{ranking}</span>
+                    {d.confidence ? <span className="text-muted" style={{ fontSize: 11 }}>{d.confidence === "insufficient" ? "Insufficient evidence" : `${d.confidence} evidence`}</span> : null}
+                  </div>
                 </td>
               </tr>
             );
@@ -148,8 +167,8 @@ function DomainTable({ domains, label }: { domains: DomainStat[]; label: string 
             <td className="text-center">{overall.t}</td>
             <td className="text-center">{overall.c}</td>
             <td className="text-center">
-              <span className="badge" style={{ background: overallAvg >= 80 ? SUCCESS : overallAvg >= 65 ? WARNING : DANGER, fontSize: 11 }}>
-                {overallAvg >= 80 ? "Strong" : overallAvg >= 65 ? "Average" : "Needs Work"}
+              <span className="badge" style={{ background: overallAvg >= 80 ? SUCCESS : overallAvg >= 70 ? WARNING : DANGER, fontSize: 11 }}>
+                {overallAvg >= 80 ? "Strong" : overallAvg >= 70 ? "Developing" : "Needs Work"}
               </span>
             </td>
           </tr>
@@ -177,18 +196,7 @@ export function PerformanceScreen() {
 
   const filteredData = data;
 
-  const stats = useMemo(() => {
-    if (!filteredData || filteredData.attempts.length === 0) return null;
-    const examOnly = filteredData.attempts.filter((a) => !a.trainingMode);
-    const avg = examOnly.length
-      ? Math.round(examOnly.reduce((s, a) => s + a.scorePercent, 0) / examOnly.length)
-      : 0;
-    const best = examOnly.length ? Math.max(...examOnly.map((a) => a.scorePercent)) : 0;
-    const passRate = examOnly.length
-      ? Math.round((examOnly.filter((a) => a.passed).length / examOnly.length) * 100)
-      : 0;
-    return { avg, best, passRate, totalAttempts: examOnly.length };
-  }, [filteredData]);
+  const stats = filteredData?.readiness;
 
   if (loading) {
     return <SkeletonPerformance />;
@@ -253,8 +261,8 @@ export function PerformanceScreen() {
                   <i className="bi bi-graph-up" style={{ color: TEAL, fontSize: 18 }} />
                 </div>
                 <div>
-                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.avg}%</div>
-                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Average Score</div>
+                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.score === null ? "—" : stats.score}</div>
+                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Readiness / 100</div>
                 </div>
               </div>
             </div>
@@ -266,21 +274,21 @@ export function PerformanceScreen() {
                   <i className="bi bi-trophy-fill" style={{ color: SUCCESS, fontSize: 18 }} />
                 </div>
                 <div>
-                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.best}%</div>
-                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Best Score</div>
+                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.firstSeenAccuracy}%</div>
+                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Fresh Accuracy</div>
                 </div>
               </div>
             </div>
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card h-100" style={{ borderTop: `3px solid ${stats.passRate >= 65 ? SUCCESS : DANGER}` }}>
+            <div className="card h-100" style={{ borderTop: `3px solid ${stats.coveragePercent >= 60 ? SUCCESS : WARNING}` }}>
               <div className="card-body d-flex align-items-start gap-3 p-3">
-                <div className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 42, height: 42, background: `${stats.passRate >= 65 ? SUCCESS : DANGER}14` }}>
-                  <i className="bi bi-check-circle-fill" style={{ color: stats.passRate >= 65 ? SUCCESS : DANGER, fontSize: 18 }} />
+                <div className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 42, height: 42, background: `${stats.coveragePercent >= 60 ? SUCCESS : WARNING}14` }}>
+                  <i className="bi bi-collection-fill" style={{ color: stats.coveragePercent >= 60 ? SUCCESS : WARNING, fontSize: 18 }} />
                 </div>
                 <div>
-                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.passRate}%</div>
-                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Pass Rate</div>
+                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.coveragePercent}%</div>
+                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Bank Coverage</div>
                 </div>
               </div>
             </div>
@@ -292,8 +300,8 @@ export function PerformanceScreen() {
                   <i className="bi bi-pencil-square" style={{ color: PRIMARY, fontSize: 18 }} />
                 </div>
                 <div>
-                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.totalAttempts}</div>
-                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Total Attempts</div>
+                  <div className="fw-bold" style={{ fontSize: 24, color: "#1A1D23", lineHeight: 1.1 }}>{stats.distinctFullSimulationCount}</div>
+                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 500, marginTop: 2 }}>Full Simulations</div>
                 </div>
               </div>
             </div>
@@ -306,8 +314,8 @@ export function PerformanceScreen() {
           <div className="card-body p-4">
             <div className="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
               <div>
-                <h2 id="readiness-title" className="h5 mb-1">Exam readiness</h2>
-                <p className="text-muted small mb-0">An evidence-based guide from recent scores, question coverage, consistency, and domain balance—not a guarantee of the certification result.</p>
+                <h2 id="readiness-title" className="h5 mb-1">Exam Readiness Evidence</h2>
+                <p className="text-muted small mb-0">A transparent coaching guide from fresh-question performance, full simulations, blueprint mastery, coverage, and consistency—not an official PMI result or pass guarantee.</p>
               </div>
               <div className="text-end">
                 <div className="fw-bold" style={{ color: filteredData.readiness.score !== null && filteredData.readiness.score >= 75 ? SUCCESS : filteredData.readiness.score !== null && filteredData.readiness.score >= 60 ? WARNING : DANGER, fontSize: filteredData.readiness.score === null ? 18 : 30 }}>
@@ -323,15 +331,61 @@ export function PerformanceScreen() {
                 ["Question coverage", filteredData.readiness.coveragePercent],
                 ["Score consistency", filteredData.readiness.consistency],
                 ["Unanswered rate", filteredData.readiness.unansweredRate],
-                ["Recurring mistakes", filteredData.readiness.recurringMistakes],
+                ["Repeat share", filteredData.readiness.repeatRate],
               ].map(([label, value]) => (
                 <div className="col-6 col-lg-2" key={String(label)}>
-                  <div className="rounded-3 bg-light p-3 h-100"><div className="fw-bold fs-5">{value}{label === "Recurring mistakes" ? "" : "%"}</div><div className="text-muted small">{label}</div></div>
+                  <div className="rounded-3 bg-light p-3 h-100"><div className="fw-bold fs-5">{value}%</div><div className="text-muted small">{label}</div></div>
                 </div>
               ))}
             </div>
+            <div className="row g-3 mb-3">
+              <div className="col-md-3"><div className="rounded-3 border p-3 h-100"><strong>{filteredData.readiness.firstSeenQuestionCount}</strong><div className="text-muted small">Fresh questions assessed</div></div></div>
+              <div className="col-md-3"><div className="rounded-3 border p-3 h-100"><strong>{filteredData.readiness.blueprintMastery}%</strong><div className="text-muted small">Blueprint-weighted mastery</div></div></div>
+              <div className="col-md-3"><div className="rounded-3 border p-3 h-100"><strong>{filteredData.readiness.blueprintCoverage}%</strong><div className="text-muted small">Blueprint with enough evidence</div></div></div>
+              <div className="col-md-3"><div className="rounded-3 border p-3 h-100"><strong>{filteredData.readiness.distinctFullSimulationCount}</strong><div className="text-muted small">Different full simulations</div><div className="text-muted" style={{ fontSize: 11 }}>{filteredData.readiness.classificationCoverage}% content classified</div></div></div>
+            </div>
+            <div className="row g-3 mb-3">
+              <div className="col-lg-4">
+                <div className="rounded-3 border p-3 h-100">
+                  <h3 className="h6 mb-2">Pacing</h3>
+                  {filteredData.readiness.averageSecondsPerQuestion === null ? (
+                    <p className="text-muted small mb-0">Timing evidence starts with your next attempt.</p>
+                  ) : (
+                    <>
+                      <div className="fw-bold fs-5">{filteredData.readiness.averageSecondsPerQuestion}s <span className="text-muted fw-normal fs-6">per question</span></div>
+                      <p className="small mb-0 text-capitalize">{filteredData.readiness.paceStatus.replace("_", " ")} · target about {filteredData.readiness.targetSecondsPerQuestion}s</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="col-lg-8">
+                <div className="rounded-3 border p-3 h-100">
+                  <h3 className="h6 mb-2">Full-exam stamina</h3>
+                  <div className="row g-2">
+                    {filteredData.readiness.stamina.map((segment) => (
+                      <div className="col-4" key={segment.label}>
+                        <div className="bg-light rounded-2 p-2 h-100">
+                          <div className="fw-bold">{segment.accuracy === null ? "—" : `${segment.accuracy}%`}</div>
+                          <div className="text-muted" style={{ fontSize: 11 }}>{segment.label} · {segment.questionCount} answers</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {filteredData.readiness.staminaEvidenceCount < 60 ? <p className="text-muted small mb-0 mt-2">Complete a full simulation for reliable early-to-late comparison.</p> : null}
+                </div>
+              </div>
+            </div>
             <h3 className="h6">Recommended next steps</h3>
             <ul className="mb-0 ps-3">{filteredData.readiness.recommendations.map((item) => <li className="mb-1" key={item}>{item}</li>)}</ul>
+            <div className="d-flex flex-wrap gap-2 mt-3">
+              {filteredData.readiness.recurringMistakes.length > 0 ? <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setActiveTab("past-results")}>Review recurring mistakes</button> : null}
+              <Link href="/me/exams" className="btn btn-sm btn-primary">Choose next practice test</Link>
+            </div>
+            <details className="mt-3 small text-muted">
+              <summary>How this is calculated</summary>
+              <p className="mb-1 mt-2">{filteredData.readiness.formula}</p>
+              <p className="mb-0">A score unlocks only after two different full simulations, at least 60% product coverage, at least 75% blueprint coverage with sufficient samples, at least 90% classified content, and enough fresh-question evidence.</p>
+            </details>
           </div>
         </section>
       )}

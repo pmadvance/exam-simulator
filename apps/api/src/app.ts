@@ -366,12 +366,19 @@ app.use("/api", studentRouter);
 app.use("/api/admin", adminRouter);
 
 // ── Error handler ──────────────────────────────────────────────
-app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+app.use((error: unknown, request: Request, response: Response, next: NextFunction) => {
+  if (response.headersSent) {
+    console.error(`[API] Error after response started: ${request.method} ${request.originalUrl}`, error);
+    next(error);
+    return;
+  }
+
   if (error instanceof z.ZodError) {
     response.status(400).json({ message: "Validation failed", issues: error.flatten() });
     return;
   }
 
+  console.error(`[API] ${request.method} ${request.originalUrl}`, error);
   if (error instanceof Error) {
     response.status(500).json({ message: error.message });
     return;

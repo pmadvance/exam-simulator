@@ -25,15 +25,16 @@ export function CatalogSection({ products }: { products: ProductCard[] }) {
     let cancelled = false;
     async function check() {
       try {
-        const [latestProducts, latestEnrollments] = await Promise.allSettled([
-          browserApiFetch<ProductCard[]>("/api/products"),
-          browserApiFetch<EnrollmentSummary[]>("/api/enrollments"),
-        ]);
-        if (!cancelled && latestProducts.status === "fulfilled" && Array.isArray(latestProducts.value)) {
-          setCatalogProducts(latestProducts.value);
+        const latestProducts = await browserApiFetch<ProductCard[]>("/api/products");
+        if (!cancelled && Array.isArray(latestProducts)) {
+          setCatalogProducts(latestProducts);
         }
-        if (!cancelled && latestEnrollments.status === "fulfilled" && Array.isArray(latestEnrollments.value)) {
-          setEnrollments(latestEnrollments.value.filter((e) => e.status === "active" && new Date(e.expiresAt) > new Date()));
+        const session = await browserApiFetch<{ authenticated: boolean }>("/api/auth/session-status");
+        if (session.authenticated) {
+          const latestEnrollments = await browserApiFetch<EnrollmentSummary[]>("/api/enrollments");
+          if (!cancelled && Array.isArray(latestEnrollments)) {
+            setEnrollments(latestEnrollments.filter((e) => e.status === "active" && new Date(e.expiresAt) > new Date()));
+          }
         }
       } catch { /* not logged in */ }
     }

@@ -49,17 +49,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <section className="checkoutGrid">
         <article className="checkoutCard">
           <h2>What You Get</h2>
-          <p className="statusLine">
-            Comprehensive mock exams built to simulate the exact logic, difficulty, and structure of the latest PMP Examination Content Outline (ECO). This pack targets situational, scenario-based questions across all three core domains: People, Process, and Business Environment.
-          </p>
-          <p className="statusLine" style={{ marginTop: 8 }}>
-            Ideal for candidates aiming to pass on their first try or as a post-training tool for PM Exam Pro learners.
-          </p>
+          <p className="statusLine">{product.description}</p>
 
           <div className="detailList" style={{ marginTop: 12 }}>
             <span>Access Duration: {product.accessDays} Days Full Access</span>
-            <span>Difficulty Level: {product.difficulty} (Matches actual PMI exam standard)</span>
-            <span>Growing question pool with detailed explanations</span>
+            <span>Difficulty Level: {product.difficulty}</span>
+            <span>{readyExams.reduce((total, exam) => total + exam.questionCount, 0)} published practice questions with explanations</span>
             <span>Available Tests: {readyExams.length} Practice {readyExams.length === 1 ? "Test" : "Tests"}</span>
           </div>
 
@@ -70,18 +65,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <p className="statusLine">Questions are coming soon. A free preview will appear when published questions are available.</p>
               ) : (
                 <div className="stack" style={{ marginTop: 10 }}>
-                  <div className="questionCard">
-                    <p className="questionLabel">{readyExams.length} practice {readyExams.length === 1 ? "test" : "tests"} included</p>
-                    <h3 style={{ marginTop: 4 }}>{readyExams[0].title}</h3>
-                    <p className="statusLine" style={{ marginTop: 8 }}>
-                      {readyExams[0].questionCount} questions · {readyExams[0].timeLimitMinutes} minutes · pass threshold {readyExams[0].passThreshold}%
-                    </p>
-                    <div className="simulatorActions" style={{ marginTop: 8 }}>
-                      <Link href={`/exams/${readyExams[0].slug}`} className="secondaryButton">
-                        Try free preview
-                      </Link>
+                  {readyExams.map((exam) => (
+                    <div className="questionCard" key={exam.id}>
+                      <h3 style={{ marginTop: 4 }}>{exam.title}</h3>
+                      <p className="statusLine" style={{ marginTop: 8 }}>
+                        {exam.examType === "full_simulation" ? "Full simulation" : exam.examType === "quiz" ? "Quiz" : "Section practice"} · {exam.questionCount} questions · {exam.timeLimitMinutes} minutes · practice target {exam.passThreshold}%
+                      </p>
+                      <div className="simulatorActions" style={{ marginTop: 8 }}>
+                        <Link href={`/exams/${exam.slug}`} className="secondaryButton">
+                          Try free preview
+                        </Link>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               )}
             </>

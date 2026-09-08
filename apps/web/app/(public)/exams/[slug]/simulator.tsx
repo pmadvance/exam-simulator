@@ -15,7 +15,7 @@ type SimulatorProps = {
     id?: number;
     prompt: string;
     options: Record<string, string>;
-    explanation: string;
+    explanation?: string;
   };
   trialQuestions?: TrialQuestion[];
 };
@@ -86,6 +86,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
   const autoNextRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timerActiveRef = useRef(false);
   const timerStartedAtRef = useRef<number | null>(null); // Track when timer started to distinguish "loaded with 0" vs "ran out"
+  const questionTimingsRef = useRef<Record<string, number>>({});
 
   // ─── Swipe navigation for mobile ───
   const swipeHandlers = useSwipe({
@@ -110,6 +111,18 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     }, 1000);
     return () => { window.clearInterval(timer); timerActiveRef.current = false; timerStartedAtRef.current = null; };
   }, [attempt, result]);
+
+  // Record active time by question. This supports pacing and stamina insights
+  // without storing clicks, keystrokes, or other unnecessary behavioural data.
+  useEffect(() => {
+    const questionId = questions[currentIndex]?.id;
+    if (!attempt || result || !questionId || document.hidden) return;
+    const timer = window.setInterval(() => {
+      const key = String(questionId);
+      questionTimingsRef.current[key] = (questionTimingsRef.current[key] ?? 0) + 1;
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [attempt, result, questions, currentIndex]);
 
   useEffect(() => {
     function syncFullscreenState() {
@@ -189,12 +202,12 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
       try {
         await browserApiFetch<AttemptState>(`/api/attempts/${attempt.id}/progress`, {
           method: "PATCH",
-          body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview) })
+          body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview), questionTimings: questionTimingsRef.current })
         });
       } catch { /* continue to submit even if save fails */ }
       const submission = await browserApiFetch<AttemptResult>(`/api/attempts/${attempt.id}/submit`, {
         method: "POST",
-        body: JSON.stringify({ answers })
+        body: JSON.stringify({ answers, questionTimings: questionTimingsRef.current })
       });
       setResult(submission);
       setShowReviewScreen(false);
@@ -218,6 +231,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     setAttempt(a);
     setAnswers(a.answers ?? {});
     setMarkedForReview(new Set(a.markedForReview ?? []));
+    questionTimingsRef.current = a.questionTimings ?? {};
     setSubmittedTrainingAnswers(new Set());
     // Use remainingMinutes from API if available (resuming), otherwise use full time (new attempt)
     const remainingSeconds = a.remainingMinutes !== undefined 
@@ -296,7 +310,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
       try {
         await browserApiFetch<AttemptState>(`/api/attempts/${attempt.id}/progress`, {
           method: "PATCH",
-          body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview) })
+          body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview), questionTimings: questionTimingsRef.current })
         });
         setSaveState("saved");
       } catch {
@@ -344,7 +358,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     try {
       await browserApiFetch<AttemptState>(`/api/attempts/${attempt.id}/progress`, {
         method: "PATCH",
-        body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview) })
+        body: JSON.stringify({ answers, markedForReview: Array.from(markedForReview), questionTimings: questionTimingsRef.current })
       });
       setStatusMessage("Progress saved. You can resume this test later from My Exams.");
       window.location.href = "/me/exams";
@@ -370,9 +384,6 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     if (attempt?.trainingMode && submittedTrainingAnswers.has(questionId)) return;
     const qt = questions[currentIndex]?.questionType ?? "single_choice";
     if (qt === "multiple_response") {
-      // Multiple response questions always allow exactly 2 selections
-      const maxSelections = 2;
-      
       // Toggle the option in a comma-separated list
       setAnswers((prev) => {
         const current = prev[questionId] ?? "";
@@ -381,15 +392,14 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
         if (idx >= 0) { 
           // Unselect if already selected
           selected.splice(idx, 1); 
-        } else { 
-          // If at max selections, remove the first one (FIFO)
-          if (selected.length >= maxSelections) {
-            selected.shift();
-          }
+        } else {
           selected.push(option); 
           selected.sort(); 
         }
-        return { ...prev, [questionId]: selected.join(",") };
+        const next = { ...prev };
+        if (selected.length === 0) delete next[questionId];
+        else next[questionId] = selected.join(",");
+        return next;
       });
     } else {
       // For single choice: toggle if clicking same answer
@@ -883,7 +893,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
           <p className="eyebrow">Simulator</p>
           <h1>{title}</h1>
         </div>
-        <div className="timerPill">{formatTime(secondsLeft)}</div>
+        {hasAccess === true ? <div className="timerPill">{formatTime(secondsLeft)}</div> : null}
       </div>
 
       <div className="examMeta">
@@ -931,7 +941,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
       {hasAccess !== true && <p className="statusLine">{statusMessage}</p>}
 
       {hasAccess !== true && trialQuestions && trialQuestions.length > 0 ? (
-        <TrialSimulator trialQuestions={trialQuestions} productSlug={productSlug ?? slug} title={title} timeLimitMinutes={timeLimitMinutes} />
+        <TrialSimulator trialQuestions={trialQuestions} examSlug={slug} productSlug={productSlug ?? slug} title={title} timeLimitMinutes={timeLimitMinutes} />
       ) : hasAccess !== true && previewQuestion ? (
         <div className="questionCard">
           <p className="questionLabel">Question Preview (read-only)</p>
@@ -944,7 +954,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
               </button>
             ))}
           </div>
-          <p className="explanation">Explanation: {previewQuestion.explanation}</p>
+          {previewQuestion.explanation ? <p className="explanation">Explanation: {previewQuestion.explanation}</p> : null}
         </div>
       ) : null}
     </section>
@@ -1010,7 +1020,7 @@ function SubmissionConfirmDialog({
 }
 
 /* ─── Trial Mini-Simulator (full-featured for non-enrolled users) ─── */
-function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }: { trialQuestions: TrialQuestion[]; productSlug: string; title: string; timeLimitMinutes: number }) {
+function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimitMinutes }: { trialQuestions: TrialQuestion[]; examSlug: string; productSlug: string; title: string; timeLimitMinutes: number }) {
   const [trialIndex, setTrialIndex] = useState(0);
   const [trialAnswers, setTrialAnswers] = useState<Record<number, string>>({});
   const [showResult, setShowResult] = useState(false);
@@ -1031,6 +1041,9 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
   const [showTimeUpModal, setShowTimeUpModal] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [grading, setGrading] = useState(false);
+  const [trialScore, setTrialScore] = useState(0);
+  const [feedback, setFeedback] = useState<Record<number, { correct: boolean; correctAnswer: string; explanation: string }>>({});
   const autoNextRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Swipe navigation for mobile ───
@@ -1042,13 +1055,9 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
 
   const q = trialQuestions[trialIndex];
   const selected = trialAnswers[trialIndex];
-  const isCorrect = selected === q?.correctAnswer;
+  const activeFeedback = feedback[trialIndex];
   const answeredCount = Object.keys(trialAnswers).length;
   const unansweredCount = Math.max(0, trialQuestions.length - answeredCount);
-  const trialScore = trialQuestions.reduce(
-    (count, tq, i) => count + (trialAnswers[i] === tq.correctAnswer ? 1 : 0),
-    0
-  );
   const qStrikethroughs = strikethroughs[trialIndex] ?? new Set<string>();
   const qOptionHighlights = optionHighlights[trialIndex] ?? new Set<string>();
   const isQuestionHighlighted = questionHighlights.has(trialIndex);
@@ -1101,6 +1110,14 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
     if (trainingMode && revealedAnswer) return;
     setTrialAnswers((prev) => {
       const current = prev[trialIndex];
+      if (q.questionType === "multiple_response") {
+        const selectedOptions = new Set((current ?? "").split(",").filter(Boolean));
+        if (selectedOptions.has(option)) selectedOptions.delete(option); else selectedOptions.add(option);
+        const next = { ...prev };
+        if (selectedOptions.size === 0) delete next[trialIndex];
+        else next[trialIndex] = [...selectedOptions].sort().join(",");
+        return next;
+      }
       // If clicking the same answer, unselect it
       if (current === option) {
         const next = { ...prev };
@@ -1109,7 +1126,7 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
       }
       return { ...prev, [trialIndex]: option };
     });
-    if (!trainingMode && autoForward) {
+    if (!trainingMode && autoForward && q.questionType !== "multiple_response") {
       // Auto-next after 350ms only if auto-forward is enabled
       if (trialIndex < trialQuestions.length - 1) {
         if (autoNextRef.current) clearTimeout(autoNextRef.current);
@@ -1118,13 +1135,60 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
     }
   }
 
-  function submitTrialAnswer() {
+  async function gradeTrial(answerIndexes: number[]) {
+    const answers = Object.fromEntries(
+      answerIndexes
+        .map((index) => [String(trialQuestions[index]?.id ?? ""), trialAnswers[index]])
+        .filter(([id, answer]) => id && answer)
+    );
+    return browserApiFetch<{
+      score: number;
+      answered: number;
+      totalQuestions: number;
+      results: Array<{ questionId: number; correct: boolean; correctAnswer: string; explanation: string }>;
+    }>(`/api/exams/${encodeURIComponent(examSlug)}/preview/grade`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    });
+  }
+
+  async function submitTrialAnswer() {
     if (!selected) {
       setStatusMessage("Select an answer before submitting.");
       return;
     }
-    setRevealedAnswer(true);
-    setStatusMessage("Answer submitted. Review the explanation, then continue.");
+    setGrading(true);
+    try {
+      const grade = await gradeTrial([trialIndex]);
+      const result = grade.results[0];
+      if (!result) throw new Error("Preview answer could not be graded.");
+      setFeedback((current) => ({ ...current, [trialIndex]: result }));
+      setRevealedAnswer(true);
+      setStatusMessage("Answer submitted. Review the explanation, then continue.");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Unable to grade the preview answer.");
+    } finally {
+      setGrading(false);
+    }
+  }
+
+  async function submitTrial() {
+    setShowSubmitConfirm(false);
+    setGrading(true);
+    try {
+      const grade = await gradeTrial(trialQuestions.map((_question, index) => index));
+      setTrialScore(grade.score);
+      setFeedback(Object.fromEntries(grade.results.map((result) => {
+        const index = trialQuestions.findIndex((question) => question.id === result.questionId);
+        return [index, result];
+      }).filter(([index]) => Number(index) >= 0)));
+      setShowResult(true);
+      setShowTimeUpModal(false);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Unable to submit the preview.");
+    } finally {
+      setGrading(false);
+    }
   }
 
   function nextTrialQuestion() {
@@ -1194,6 +1258,9 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
     setTabSwitchCount(0);
     setShowTimeUpModal(false);
     setShowSubmitConfirm(false);
+    setFeedback({});
+    setTrialScore(0);
+    setGrading(false);
     setStatusMessage("");
   }
 
@@ -1351,12 +1418,9 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
           <SubmissionConfirmDialog
             unansweredCount={unansweredCount}
             totalQuestions={trialQuestions.length}
-            busy={false}
+            busy={grading}
             onCancel={() => setShowSubmitConfirm(false)}
-            onConfirm={() => {
-              setShowSubmitConfirm(false);
-              setShowResult(true);
-            }}
+            onConfirm={() => { void submitTrial(); }}
           />
         ) : null}
       </div>
@@ -1403,10 +1467,11 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
             <button
               className="cta buttonCta"
               type="button"
-              onClick={() => setShowResult(true)}
+              onClick={() => { void submitTrial(); }}
+              disabled={grading}
               style={{ width: "100%" }}
             >
-              Submit Answers
+              {grading ? "Submitting…" : "Submit Answers"}
             </button>
           </div>
         </div>
@@ -1469,6 +1534,7 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
             Highlight
           </button>
         </div>
+        {q.questionType === "multiple_response" ? <p className="questionLabel">Select all answers that apply.</p> : null}
 
         {q.imageUrl && (
           <div style={{ margin: "12px 0" }}>
@@ -1480,17 +1546,17 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
           </div>
         )}
 
-        <div className="optionList">
+        <div className="optionList" role={q.questionType === "multiple_response" ? "group" : "radiogroup"} aria-label="Answer choices">
           {Object.entries(q.options).map(([key, value]) => {
-            const isSelected = trialAnswers[trialIndex] === key;
+            const isSelected = (trialAnswers[trialIndex] ?? "").split(",").includes(key);
             const isStruck = qStrikethroughs.has(key);
             const isHighlighted = qOptionHighlights.has(key);
 
             // Training mode feedback styling
             let className = "optionButton";
             if (trainingMode && revealedAnswer) {
-              if (key === q.correctAnswer) className += " trialCorrect";
-              else if (key === selected && !isCorrect) className += " trialWrong";
+              if ((activeFeedback?.correctAnswer ?? "").split(",").includes(key)) className += " trialCorrect";
+              else if (isSelected && !activeFeedback?.correct) className += " trialWrong";
             } else if (isSelected) {
               className += " active";
             }
@@ -1502,6 +1568,8 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
                   type="button"
                   onClick={() => selectTrialAnswer(key)}
                   disabled={trainingMode && revealedAnswer}
+                  role={q.questionType === "multiple_response" ? "checkbox" : "radio"}
+                  aria-checked={isSelected}
                   style={{
                     textDecoration: isStruck ? "line-through" : "none",
                     opacity: isStruck ? 0.5 : 1,
@@ -1534,8 +1602,8 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
 
         {trainingMode && !revealedAnswer && (
           <div className="simulatorActions" style={{ marginTop: 12, justifyContent: "flex-start" }}>
-            <button className="cta buttonCta" type="button" onClick={submitTrialAnswer} disabled={!selected}>
-              Submit Answer
+            <button className="cta buttonCta" type="button" onClick={() => { void submitTrialAnswer(); }} disabled={!selected || grading}>
+              {grading ? "Checking…" : "Submit Answer"}
             </button>
           </div>
         )}
@@ -1550,11 +1618,11 @@ function TrialSimulator({ trialQuestions, productSlug, title, timeLimitMinutes }
         {trainingMode && revealedAnswer && (
           <div className="resultCard" style={{ marginTop: 12 }}>
             <p className="eyebrow">Training feedback</p>
-            <h3 style={{ marginTop: 0 }}>{isCorrect ? "Correct" : "Incorrect"}</h3>
+            <h3 style={{ marginTop: 0 }}>{activeFeedback?.correct ? "Correct" : "Incorrect"}</h3>
             <p className="explanation" style={{ marginBottom: 4 }}>
-              Correct answer: <strong>{q.correctAnswer}</strong>
+              Correct answer: <strong>{activeFeedback?.correctAnswer}</strong>
             </p>
-            <p className="explanation" style={{ margin: 0 }}>{q.explanation}</p>
+            <p className="explanation" style={{ margin: 0 }}>{activeFeedback?.explanation}</p>
             <div style={{ marginTop: 16 }}>
               <button className="cta buttonCta" type="button" onClick={nextTrialQuestion} disabled={trialIndex >= trialQuestions.length - 1}>
                 Next Question

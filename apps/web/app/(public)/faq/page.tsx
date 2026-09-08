@@ -105,7 +105,7 @@ export default function FaqPage() {
               <p className="mb-3" style={{ color: "#6B7280", fontSize: 13 }}>
                 Reach out to our support team and we&apos;ll get back to you within 24 hours.
               </p>
-              <a href="mailto:support@pmadvance.com" className="btn fw-semibold px-4" style={{ background: "#E8792B", color: "#fff", borderRadius: 8, fontSize: 14 }}>
+              <a href="mailto:support@pmexampro.com" className="btn fw-semibold px-4" style={{ background: "#E8792B", color: "#fff", borderRadius: 8, fontSize: 14 }}>
                 <i className="bi bi-envelope me-2" />
                 Contact Support
               </a>

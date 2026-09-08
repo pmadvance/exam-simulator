@@ -14,7 +14,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
     <main className="shell">
       <section className="sectionHeader">
         <div>
-          <p className="eyebrow">Exam In Progress</p>
+          <p className="eyebrow">Practice simulator</p>
           <h2>{exam.title}</h2>
         </div>
         <Link href="/#catalog" className="textLink">

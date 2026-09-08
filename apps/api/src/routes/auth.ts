@@ -21,6 +21,12 @@ import { z } from "zod";
 const router = Router();
 const isDevelopmentUat = process.env.NODE_ENV !== "production" && env.UAT_TEST_MODE && Boolean(env.UAT_VERIFICATION_CODE);
 
+router.get("/session-status", (request, response) => {
+  const user = getAuthUser(request);
+  response.setHeader("Cache-Control", "no-store");
+  response.json(user ? { authenticated: true, user } : { authenticated: false, user: null });
+});
+
 // ─── Send email verification code ───
 router.post("/send-verification-code", async (request, response, next) => {
   try {
@@ -192,7 +198,8 @@ router.post("/login", async (request, response, next) => {
     }
 
     const [rows] = await getPool().query(
-      `SELECT id, email, full_name AS fullName, password_hash AS passwordHash, age, occupation, gender, role, status
+      `SELECT id, email, full_name AS fullName, password_hash AS passwordHash, age, occupation, gender,
+              onboarding_completed_at AS onboardingCompletedAt, role, status
        FROM users
        WHERE email = ?
        LIMIT 1`,
@@ -209,6 +216,7 @@ router.post("/login", async (request, response, next) => {
       age: number | null;
       occupation: string | null;
       gender: string | null;
+      onboardingCompletedAt: Date | string | null;
     }>)[0];
 
     if (!user || user.status !== "active") {
@@ -277,7 +285,7 @@ router.post("/login", async (request, response, next) => {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
-        needsOnboarding: user.role === "student" && !user.age && !user.occupation && !user.gender
+        needsOnboarding: user.role === "student" && !user.onboardingCompletedAt
       }
     });
   } catch (error) {
@@ -572,7 +580,8 @@ router.get("/me", async (request, response, next) => {
     const databaseReady = await getDatabaseReady();
     if (databaseReady) {
       const [rows] = await getPool().query<RowDataPacket[]>(
-        `SELECT id, email, full_name AS fullName, age, occupation, gender, role FROM users WHERE id = ? LIMIT 1`,
+        `SELECT id, email, full_name AS fullName, age, occupation, gender,
+                onboarding_completed_at AS onboardingCompletedAt, role FROM users WHERE id = ? LIMIT 1`,
         [user.userId]
       );
       if (rows.length > 0) {
@@ -584,7 +593,7 @@ router.get("/me", async (request, response, next) => {
           occupation: rows[0].occupation,
           gender: rows[0].gender,
           role: rows[0].role,
-          needsOnboarding: rows[0].role === "student" && !rows[0].age && !rows[0].occupation && !rows[0].gender
+          needsOnboarding: rows[0].role === "student" && !rows[0].onboardingCompletedAt
         });
         return;
       }
@@ -702,6 +711,22 @@ router.patch("/profile", async (request, response, next) => {
     await getPool().execute(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, vals);
     response.json({ message: "Profile updated" });
   } catch (error) { next(error); }
+});
+
+router.post("/onboarding/complete", async (request, response, next) => {
+  try {
+    const user = requireAuth(request, response);
+    if (!user) return;
+    const { skipped } = z.object({ skipped: z.boolean().default(false) }).parse(request.body ?? {});
+    await getPool().execute(
+      `UPDATE users SET onboarding_completed_at = COALESCE(onboarding_completed_at, CURRENT_TIMESTAMP) WHERE id = ?`,
+      [user.userId]
+    );
+    await writeAuditLog(user.userId, skipped ? "auth.onboarding.skipped" : "auth.onboarding.completed", "user", String(user.userId), {});
+    response.json({ completed: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

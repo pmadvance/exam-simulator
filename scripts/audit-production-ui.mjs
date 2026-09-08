@@ -76,8 +76,8 @@ for (const viewport of [
           controls: [...document.querySelectorAll("button")].map((node) => node.textContent?.replace(/\s+/g, " ").trim()).filter(Boolean),
           optionCount: document.querySelectorAll(".optionButton").length,
           asksForMultipleAnswers: /choose\s+(two|three|all)/i.test(document.querySelector(".examQuestionText")?.textContent ?? ""),
-          radioCount: document.querySelectorAll('input[type="radio"]').length,
-          checkboxCount: document.querySelectorAll('input[type="checkbox"]').length,
+          radioCount: document.querySelectorAll('.optionButton[role="radio"], .optionButton input[type="radio"]').length,
+          checkboxCount: document.querySelectorAll('.optionButton[role="checkbox"], .optionButton input[type="checkbox"]').length,
           overflowX: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
         }));
         findings.push({ viewport: viewport.name, route: `${route}#trial`, trial });

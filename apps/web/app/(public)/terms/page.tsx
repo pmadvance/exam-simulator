@@ -31,7 +31,7 @@ export default function TermsPage() {
           </section>
           <section>
             <h2 className="h5 fw-semibold">Support</h2>
-            <p className="mb-0">For account, payment, or access issues, contact info@pmadvance.com.</p>
+            <p className="mb-0">For account, payment, or access issues, contact support@pmexampro.com.</p>
           </section>
         </div>
       </section>

@@ -69,11 +69,7 @@ export async function middleware(request: NextRequest) {
     const accessCookie = request.cookies.get("pm_access")?.value;
     const refreshCookie = request.cookies.get("pm_refresh")?.value;
     
-    // Debug: log cookies (remove in production)
-    console.log(`[Middleware] ${pathname} - pm_access: ${accessCookie ? "present" : "missing"}, pm_refresh: ${refreshCookie ? "present" : "missing"}`);
-    
     if (!accessCookie) {
-      console.log(`[Middleware] ${pathname} - No access cookie, redirecting to login`);
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
 

@@ -42,10 +42,9 @@ export type ProductCard = {
 
 export type TrialQuestion = {
   id?: number;
+  questionType: "single_choice" | "multiple_response" | "true_false";
   prompt: string;
   options: Record<string, string>;
-  correctAnswer: string;
-  explanation: string;
   imageUrl?: string | null;
 };
 
@@ -61,7 +60,6 @@ export type ExamDetail = {
     id?: number;
     prompt: string;
     options: Record<string, string>;
-    explanation: string;
   };
   trialQuestions?: TrialQuestion[];
 };
@@ -75,6 +73,7 @@ export type ProductDetail = ProductCard & {
     title: string;
     timeLimitMinutes: number;
     passThreshold: number;
+    examType?: "quiz" | "section" | "full_simulation";
     questionCount: number;
     status?: string;
   }>;
@@ -119,6 +118,7 @@ export type AttemptState = {
   startedAt: string;
   answers: Record<string, string>;
   markedForReview: string[];
+  questionTimings?: Record<string, number>;
   trainingMode?: boolean;
   status: "in_progress" | "submitted";
   submittedAt?: string | null;

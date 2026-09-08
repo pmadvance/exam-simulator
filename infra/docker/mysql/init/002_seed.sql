@@ -1,18 +1,18 @@
 -- ═══════════════════════════════════════════════════════
--- Seed data: 13 Products (PM Advance training catalog)
+-- Seed data: PM Exam Pro training catalog
 -- ═══════════════════════════════════════════════════════
 
 -- Product 1: PMP® Exam Preparation
 INSERT INTO products (id, slug, title, description, category, difficulty, price_usd, access_days, visibility)
 VALUES (1, 'pmp-exam-prep', 'PMP® Exam Preparation Practice Pack',
-  'Comprehensive practice exams aligned to the latest PMP Examination Content Outline (ECO). Covers People, Process, and Business Environment domains with situational, scenario-based questions. Ideal for participants of PM Advance''s 5-day PMP® Exam Preparation Training (35 PDUs). Includes 1,000-question bank, timed simulations, and detailed answer explanations.',
+  'Practice exams aligned to the current PMP Examination Content Outline, with situational questions across People, Process, and Business Environment. Includes timed practice, answer explanations, and performance insights.',
   'Professional Certification', 'Advanced', 299.00, 90, 'published')
 ON DUPLICATE KEY UPDATE title = VALUES(title), description = VALUES(description), category = VALUES(category), difficulty = VALUES(difficulty), price_usd = VALUES(price_usd), slug = VALUES(slug);
 
 -- Product 2: CAPM® Exam Preparation
 INSERT INTO products (id, slug, title, description, category, difficulty, price_usd, access_days, visibility)
 VALUES (2, 'capm-exam-prep', 'CAPM® Exam Preparation Practice Pack',
-  'Practice exams designed for the Certified Associate in Project Management (CAPM®) certification. Covers predictive, agile, and hybrid project management approaches based on the PMBOK® Guide 7th Edition. Perfect companion to PM Advance''s 3-day CAPM® Training (23 contact hours).',
+  'Practice exams for the CAPM certification covering project management fundamentals, predictive methods, agile approaches, and business analysis. Includes timed practice, answer explanations, and performance insights.',
   'Professional Certification', 'Intermediate', 199.00, 90, 'published')
 ON DUPLICATE KEY UPDATE title = VALUES(title), description = VALUES(description), category = VALUES(category), difficulty = VALUES(difficulty), price_usd = VALUES(price_usd), slug = VALUES(slug);
 

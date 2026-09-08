@@ -206,14 +206,14 @@ router.post("/users", async (request, response, next) => {
         const html = `
           <div style="font-family: Inter, system-ui, sans-serif; max-width: 560px; margin: 0 auto;">
             <h2 style="color:#E8792B;">Welcome, ${payload.fullName}!</h2>
-            <p>Your account on PMP Practice Exam Simulator has been created by an administrator.</p>
+            <p>Your PM Exam Pro account has been created by an administrator.</p>
             <p><strong>Email:</strong> ${payload.email}<br/>
                <strong>Temporary Password:</strong> <code>${generatedPassword}</code></p>
             <p>Please sign in and change your password as soon as possible.</p>
             <p style="color:#666;font-size:12px;">If you did not expect this email, please contact support.</p>
           </div>
         `;
-        await sendMail(payload.email, "Welcome to PMP Practice Exam Simulator", html);
+        await sendMail(payload.email, "Welcome to PM Exam Pro", html);
       } catch {
         // Email failure should not block user creation
       }
@@ -482,7 +482,7 @@ router.post("/users/import/apply", async (request, response, next) => {
             <p><strong>Email:</strong> ${r.email}<br/><strong>Password:</strong> <code>${generated}</code></p>
             <p>Please change your password after signing in.</p>
           </div>`;
-          await sendMail(r.email, "Welcome to PMP Practice Exam Simulator", html);
+          await sendMail(r.email, "Welcome to PM Exam Pro", html);
         } catch { /* ignore email errors */ }
       }
 

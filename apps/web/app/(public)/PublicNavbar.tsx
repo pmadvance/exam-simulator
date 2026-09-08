@@ -22,8 +22,9 @@ export function PublicNavbar() {
 
     async function checkAuth() {
       try {
-        const me = await browserApiFetch<{ id: number; email: string; fullName: string }>("/api/auth/me");
-        if (!cancelled && me?.email) {
+        const session = await browserApiFetch<{ authenticated: boolean; user: { email: string; fullName: string } | null }>("/api/auth/session-status");
+        const me = session.user;
+        if (!cancelled && session.authenticated && me?.email) {
           setIsLoggedIn(true);
           setUser(me);
         }

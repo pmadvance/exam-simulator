@@ -149,6 +149,7 @@ export type AdminExam = {
   title: string;
   timeLimitMinutes: number;
   passThreshold: number;
+  examType?: "quiz" | "section" | "full_simulation";
   questionCount: number;
   status: "draft" | "published";
 };
@@ -395,7 +396,7 @@ export function getAttemptReport() {
 
 export function getAdminSettings() {
   return safeFetch<AdminSettings>("/api/admin/settings", {
-    supportEmail: "inquiry@pmadvance.com.my",
+    supportEmail: "support@pmexampro.com",
     maintenanceMode: false,
     maintenancePageType: "maintenance",
     maintenanceMessage: "",

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -51,9 +50,29 @@ export function OnboardingScreen() {
           body: JSON.stringify({ examDate, certificationLabel: certification || undefined }),
         });
       }
+      await browserApiFetch("/api/auth/onboarding/complete", {
+        method: "POST",
+        body: JSON.stringify({ skipped: false }),
+      });
       router.push("/me/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save your profile.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function skip() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await browserApiFetch("/api/auth/onboarding/complete", {
+        method: "POST",
+        body: JSON.stringify({ skipped: true }),
+      });
+      router.push("/me/dashboard");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to skip onboarding.");
     } finally {
       setBusy(false);
     }
@@ -104,7 +123,7 @@ export function OnboardingScreen() {
             {message && <div className="alert alert-warning mt-3 mb-0" role="status">{message}</div>}
             <div className="d-flex flex-wrap gap-2 mt-4">
               <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save and continue"}</button>
-              <Link className="btn btn-outline-secondary" href="/me/dashboard">Skip for now</Link>
+              <button className="btn btn-outline-secondary" type="button" onClick={() => { void skip(); }} disabled={busy}>Skip for now</button>
             </div>
           </form>
         </div>

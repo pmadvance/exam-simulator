@@ -49,11 +49,11 @@ export default async function HomePage() {
                 className="fw-bold text-white mb-3"
                 style={{ fontSize: "clamp(2.2rem, 5vw, 3.25rem)", lineHeight: 1.12, letterSpacing: "-0.025em" }}
               >
-                Pass Your Project Management Exam on the First Attempt.
+                Build the Knowledge and Confidence to Face Exam Day.
               </h1>
 
               <p className="mb-4" style={{ color: "rgba(255,255,255,0.6)", fontSize: "1.1rem", lineHeight: 1.65, maxWidth: "52ch" }}>
-                Don&apos;t risk costly retake fees. Master the exact logic of the PMP®, CAPM®, PMI-RMP®, and PMI-ACP® exams with realistic timed simulations, instant explanations, and 15+ years of proven certification training expertise, so you walk in prepared and walk out certified.
+                Prepare with realistic timed practice, clear answer explanations, and actionable performance insights backed by more than 15 years of certification training experience.
               </p>
 
               <div className="d-flex gap-3 flex-wrap mb-4">
@@ -110,10 +110,10 @@ export default async function HomePage() {
                 </h6>
                 <ul className="list-unstyled d-grid gap-3 mb-0">
                   {[
-                    { icon: "bi-patch-check", text: "Questions crafted in full alignment with PMI standards — developed in strict alignment with the official PMI Examination Content Outline by a PMI Official Training Partner." },
-                    { icon: "bi-people", text: "Over 3,000 professionals certified — 15+ years of real classroom experience behind every question." },
-                    { icon: "bi-stopwatch", text: "Exam-realistic simulations — timed, pressure-tested, and built to mirror the actual exam experience." },
-                    { icon: "bi-graph-up-arrow", text: "Know exactly where you stand before exam day — our analytics pinpoint your weak spots so you study what matters." },
+                    { icon: "bi-patch-check", text: "Practice content organized around the applicable certification blueprint and reviewed by experienced trainers." },
+                    { icon: "bi-people", text: "More than 15 years of classroom experience informs the practice and explanations." },
+                    { icon: "bi-stopwatch", text: "Timed practice helps you build familiarity with exam-style decision making under pressure." },
+                    { icon: "bi-graph-up-arrow", text: "Readiness evidence highlights coverage, recurring mistakes, weak knowledge areas, and the next useful study action." },
                     { icon: "bi-lightbulb", text: "Every question comes with a clear explanation — understand the reasoning, not just the answer." },
                   ].map((item) => (
                     <li key={item.text} className="d-flex align-items-start gap-3">
@@ -185,7 +185,7 @@ export default async function HomePage() {
               {
                 step: "01",
                 title: "Choose Your Exam",
-                desc: "Select the certification you’re targeting (PMP®, CAPM®, PMI-RMP®, or PMI-ACP®) and create your free account in less than a minute.",
+                desc: "Choose from the exam packs currently available in the catalog and create your free account in less than a minute.",
                 icon: "bi-bag-check",
                 color: "#E8792B",
                 bg: "#FFF3EB",
@@ -193,7 +193,7 @@ export default async function HomePage() {
               {
                 step: "02",
                 title: "Practice in Real-Exam Mode",
-                desc: "Experience realistic, timed simulations featuring an authentic test interface equipped with countdown timers, question flagging, and strikethrough tools.",
+                desc: "Use timed practice with countdown timers, question flagging, review navigation, and strikethrough tools.",
                 icon: "bi-stopwatch",
                 color: "#2B7A87",
                 bg: "#E6F4F6",

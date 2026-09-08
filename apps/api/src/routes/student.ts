@@ -9,11 +9,12 @@ import { env } from "../config.js";
 import { getPool } from "../db.js";
 import { sampleQuestions } from "../fixtures.js";
 import { getDatabaseReady, getExamBySlug, getProductBySlug, hasActiveEnrollment, parseJsonField, serializeAttemptRow, toIsoString, writeAuditLog } from "../helpers.js";
-import { progressSchema } from "../schemas.js";
-import { requireAuth } from "../middleware/auth.js";
+import { attemptSubmitSchema, progressSchema } from "../schemas.js";
+import { getAuthUser, requireAuth } from "../middleware/auth.js";
 import { publicQuestionSql, publishedQuestionCache, type QuestionCacheStatus } from "../services/question-cache.js";
 import { attempts } from "../store.js";
 import type { AttemptRecord, AttemptRow } from "../types.js";
+import { calculateReadiness, type AnalyticsAttempt, type AnalyticsQuestion } from "../analytics/readiness.js";
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -56,7 +57,8 @@ const trainingQuestionSql = `
   SELECT id, question_type AS questionType, prompt,
          option_a AS optionA, option_b AS optionB, option_c AS optionC,
          option_d AS optionD, option_e AS optionE,
-         correct_answer AS correctAnswer, explanation, image_url AS imageUrl
+         correct_answer AS correctAnswer, explanation, image_url AS imageUrl,
+         eco_domain AS ecoDomain, performance_domain AS performanceDomain
   FROM questions
   WHERE exam_id = ? AND status = 'published'
   ORDER BY id ASC`;
@@ -84,7 +86,7 @@ async function loadAttemptQuestionContext(
 
     const sqlStartedAt = performance.now();
     const [rows] = await connection.query<RowDataPacket[]>(
-      `SELECT exam_id AS examId, status, training_mode AS trainingMode
+      `SELECT exam_id AS examId, status, training_mode AS trainingMode, questions_snapshot_json AS questionsSnapshotJson
        FROM attempts
        WHERE id = ? AND user_id = ?
        LIMIT 1`,
@@ -149,7 +151,7 @@ function formatServerTiming(
 }
 
 function logQuestionLoad(
-  cacheStatus: QuestionCacheStatus | "training-bypass",
+  cacheStatus: QuestionCacheStatus | "training-bypass" | "snapshot",
   questionCount: number,
   responseBytes: number,
   timing: QuestionLoadTiming,
@@ -206,8 +208,9 @@ router.get("/enrollments", async (request, response, next) => {
 
 router.get("/exams/:slug/access", async (request, response, next) => {
   try {
-    const user = requireAuth(request, response);
+    const user = getAuthUser(request);
     if (!user) {
+      response.json({ hasAccess: false });
       return;
     }
 
@@ -232,9 +235,9 @@ router.get("/exams/:slug/access", async (request, response, next) => {
 // Check if user has active enrollment for a product by slug
 router.get("/products/:slug/enrollment", async (request, response, next) => {
   try {
-    const user = requireAuth(request, response);
+    const user = getAuthUser(request);
     if (!user) {
-      response.status(401).json({ hasAccess: false });
+      response.json({ hasAccess: false });
       return;
     }
 
@@ -310,6 +313,7 @@ router.get("/exams/:slug/in-progress", async (request, response, next) => {
       `SELECT attempts.id, exams.slug AS examSlug, attempts.started_at AS startedAt,
               attempts.answers_json AS answersJson,
               attempts.marked_for_review_json AS markedForReviewJson,
+              attempts.question_timings_json AS questionTimingsJson,
               attempts.training_mode AS trainingMode,
               attempts.status, attempts.submitted_at AS submittedAt,
               GREATEST(0, (? * 60) - TIMESTAMPDIFF(SECOND, attempts.started_at, UTC_TIMESTAMP())) AS remainingSeconds
@@ -444,6 +448,7 @@ router.post("/exams/:slug/attempts", async (request, response, next) => {
         startedAt: new Date().toISOString(),
         answers: {},
         markedForReview: [],
+        questionTimings: {},
         trainingMode,
         status: "in_progress"
       };
@@ -468,6 +473,7 @@ router.post("/exams/:slug/attempts", async (request, response, next) => {
       `SELECT attempts.id, exams.slug AS examSlug, attempts.started_at AS startedAt,
               attempts.answers_json AS answersJson,
               attempts.marked_for_review_json AS markedForReviewJson,
+              attempts.question_timings_json AS questionTimingsJson,
               attempts.training_mode AS trainingMode,
               attempts.status, attempts.submitted_at AS submittedAt
        FROM attempts
@@ -484,10 +490,11 @@ router.post("/exams/:slug/attempts", async (request, response, next) => {
     }
 
     const attemptId = crypto.randomUUID();
+    const [snapshotRows] = await getPool().query<RowDataPacket[]>(trainingQuestionSql, [exam.id]);
     await getPool().execute(
-      `INSERT INTO attempts (id, user_id, exam_id, status, training_mode, answers_json, marked_for_review_json, total_questions)
-       VALUES (?, ?, ?, 'in_progress', ?, ?, ?, ?)`,
-      [attemptId, user.userId, exam.id, trainingMode ? 1 : 0, JSON.stringify({}), JSON.stringify([]), exam.questionCount]
+      `INSERT INTO attempts (id, user_id, exam_id, status, training_mode, answers_json, marked_for_review_json, question_timings_json, questions_snapshot_json, total_questions)
+       VALUES (?, ?, ?, 'in_progress', ?, ?, ?, ?, ?, ?)`,
+      [attemptId, user.userId, exam.id, trainingMode ? 1 : 0, JSON.stringify({}), JSON.stringify([]), JSON.stringify({}), JSON.stringify(snapshotRows), snapshotRows.length]
     );
 
     const attempt: AttemptRecord = {
@@ -496,6 +503,7 @@ router.post("/exams/:slug/attempts", async (request, response, next) => {
       startedAt: new Date().toISOString(),
       answers: {},
       markedForReview: [],
+      questionTimings: {},
       trainingMode,
       status: "in_progress"
     };
@@ -530,6 +538,7 @@ router.get("/attempts/:id", async (request, response, next) => {
       `SELECT attempts.id, exams.slug AS examSlug, attempts.started_at AS startedAt,
               attempts.answers_json AS answersJson,
               attempts.marked_for_review_json AS markedForReviewJson,
+              attempts.question_timings_json AS questionTimingsJson,
               attempts.training_mode AS trainingMode,
               attempts.status,
               attempts.submitted_at AS submittedAt
@@ -577,9 +586,15 @@ router.get("/attempts/:id/questions", async (request, response, next) => {
 
     const includeTrainingFields = Boolean(attempt.trainingMode);
     const questionLoadStartedAt = performance.now();
-    let cacheStatus: QuestionCacheStatus | "training-bypass";
+    let cacheStatus: QuestionCacheStatus | "training-bypass" | "snapshot";
     let rows: RowDataPacket[];
-    if (includeTrainingFields) {
+    const snapshotRows = parseJsonField<RowDataPacket[]>(attempt.questionsSnapshotJson as string | null, []);
+    if (snapshotRows.length > 0) {
+      cacheStatus = "snapshot";
+      rows = includeTrainingFields
+        ? snapshotRows
+        : snapshotRows.map(({ correctAnswer: _correctAnswer, explanation: _explanation, ecoDomain: _ecoDomain, performanceDomain: _performanceDomain, ...row }) => row as RowDataPacket);
+    } else if (includeTrainingFields) {
       cacheStatus = "training-bypass";
       rows = await queryQuestionRows(Number(attempt.examId), true, timing);
     } else {
@@ -622,6 +637,7 @@ router.patch("/attempts/:id/progress", async (request, response, next) => {
 
       attempt.answers = payload.answers;
       attempt.markedForReview = payload.markedForReview;
+      attempt.questionTimings = payload.questionTimings;
       response.json(attempt);
       return;
     }
@@ -633,9 +649,9 @@ router.patch("/attempts/:id/progress", async (request, response, next) => {
 
     const [result] = await getPool().execute(
       `UPDATE attempts
-       SET answers_json = ?, marked_for_review_json = ?
+       SET answers_json = ?, marked_for_review_json = ?, question_timings_json = ?
        WHERE id = ? AND user_id = ? AND status = 'in_progress'`,
-      [JSON.stringify(payload.answers), JSON.stringify(payload.markedForReview), request.params.id, user.userId]
+      [JSON.stringify(payload.answers), JSON.stringify(payload.markedForReview), JSON.stringify(payload.questionTimings), request.params.id, user.userId]
     );
 
     if ((result as { affectedRows: number }).affectedRows === 0) {
@@ -647,6 +663,7 @@ router.patch("/attempts/:id/progress", async (request, response, next) => {
       `SELECT attempts.id, exams.slug AS examSlug, attempts.started_at AS startedAt,
               attempts.answers_json AS answersJson,
               attempts.marked_for_review_json AS markedForReviewJson,
+              attempts.question_timings_json AS questionTimingsJson,
               attempts.training_mode AS trainingMode,
               attempts.status,
               attempts.submitted_at AS submittedAt
@@ -665,6 +682,7 @@ router.patch("/attempts/:id/progress", async (request, response, next) => {
 
 router.post("/attempts/:id/submit", async (request, response, next) => {
   try {
+    const submittedPayload = attemptSubmitSchema.parse(request.body ?? {});
     const databaseReady = await getDatabaseReady();
     if (!databaseReady) {
       const attempt = attempts.get(request.params.id);
@@ -672,6 +690,9 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
         response.status(404).json({ message: "Attempt not found" });
         return;
       }
+
+      attempt.answers = { ...attempt.answers, ...submittedPayload.answers };
+      attempt.questionTimings = submittedPayload.questionTimings;
 
       // For training mode, just calculate score without persisting
       const score = Object.entries(attempt.answers).reduce((total, [questionId, answer]) => {
@@ -700,52 +721,36 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
       return;
     }
 
-    // First check if this is a training mode attempt
-    const [trainingCheck] = await getPool().query(
-      `SELECT training_mode AS trainingMode FROM attempts WHERE id = ? AND user_id = ?`,
+    const [rows] = await getPool().query<RowDataPacket[]>(
+      `SELECT id, exam_id AS examId, answers_json AS answersJson, total_questions AS totalQuestions,
+              training_mode AS trainingMode, questions_snapshot_json AS questionsSnapshotJson
+       FROM attempts WHERE id = ? AND user_id = ? LIMIT 1`,
       [request.params.id, user.userId]
     );
-    
-    const isTrainingMode = Boolean((trainingCheck as { trainingMode: number }[])[0]?.trainingMode);
-
-    const [rows] = await getPool().query(
-      `SELECT attempts.id, attempts.answers_json AS answersJson, attempts.total_questions AS totalQuestions,
-              questions.id AS questionId, questions.correct_answer AS correctAnswer, questions.question_type AS questionType
-       FROM attempts
-       INNER JOIN exams ON exams.id = attempts.exam_id
-       LEFT JOIN questions ON questions.exam_id = exams.id AND questions.status = 'published'
-       WHERE attempts.id = ? AND attempts.user_id = ?`,
-      [request.params.id, user.userId]
-    );
-
-    const attemptRows = rows as Array<{
-      id: string;
-      answersJson: string;
-      totalQuestions: number;
-      questionId: number | null;
-      questionType: string;
-      correctAnswer: string | null;
-    }>;
-
-    if (attemptRows.length === 0) {
+    const attemptRow = rows[0];
+    if (!attemptRow) {
       response.status(404).json({ message: "Attempt not found" });
       return;
     }
+    const isTrainingMode = Boolean(attemptRow.trainingMode);
+    let gradedQuestions = parseJsonField<Array<{ id: number; correctAnswer: string }>>(attemptRow.questionsSnapshotJson as string | null, []);
+    if (gradedQuestions.length === 0) {
+      const [currentQuestions] = await getPool().query<RowDataPacket[]>(
+        `SELECT id, correct_answer AS correctAnswer FROM questions WHERE exam_id = ? AND status = 'published'`,
+        [attemptRow.examId]
+      );
+      gradedQuestions = currentQuestions.map((question) => ({ id: Number(question.id), correctAnswer: String(question.correctAnswer) }));
+    }
 
-    const dbAnswers = parseJsonField<Record<string, string>>(attemptRows[0].answersJson, {});
+    const dbAnswers = parseJsonField<Record<string, string>>(attemptRow.answersJson as string, {});
     // Use client-submitted answers as fallback if DB answers are empty (auto-save may have failed)
-    const bodyAnswers = (request.body && typeof request.body === "object" && request.body.answers && typeof request.body.answers === "object")
-      ? request.body.answers as Record<string, string>
-      : {};
-    const answers = Object.keys(dbAnswers).length > 0 ? dbAnswers : bodyAnswers;
+    // The browser payload is authoritative for the final click; merge it over the
+    // last autosave so a recently selected answer cannot be lost to save latency.
+    const answers = { ...dbAnswers, ...submittedPayload.answers };
 
-    const score = attemptRows.reduce((total, row) => {
-      if (!row.questionId || !row.correctAnswer) {
-        return total;
-      }
-
-      const userAnswer = answers[String(row.questionId)] ?? "";
-      return total + (answersMatch(userAnswer, row.correctAnswer) ? 1 : 0);
+    const score = gradedQuestions.reduce((total, question) => {
+      const userAnswer = answers[String(question.id)] ?? "";
+      return total + (answersMatch(userAnswer, question.correctAnswer) ? 1 : 0);
     }, 0);
 
     // For training mode: delete the attempt (don't persist since user saw answers)
@@ -757,7 +762,7 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
       response.json({
         attemptId: request.params.id,
         score,
-        totalQuestions: attemptRows[0].totalQuestions,
+        totalQuestions: Number(attemptRow.totalQuestions),
         submittedAt: new Date().toISOString()
       });
       return;
@@ -766,16 +771,16 @@ router.post("/attempts/:id/submit", async (request, response, next) => {
     // For regular mode: persist as submitted
     await getPool().execute(
       `UPDATE attempts
-       SET status = 'submitted', score = ?, submitted_at = CURRENT_TIMESTAMP
+       SET status = 'submitted', score = ?, answers_json = ?, question_timings_json = ?, submitted_at = CURRENT_TIMESTAMP
        WHERE id = ? AND user_id = ?`,
-      [score, request.params.id, user.userId]
+      [score, JSON.stringify(answers), JSON.stringify(submittedPayload.questionTimings), request.params.id, user.userId]
     );
 
     await writeAuditLog(user.userId, "attempt.submitted", "attempt", request.params.id, { score });
     response.json({
       attemptId: request.params.id,
       score,
-      totalQuestions: attemptRows[0].totalQuestions,
+      totalQuestions: Number(attemptRow.totalQuestions),
       submittedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -790,6 +795,7 @@ router.get("/attempts/:id/results", async (request, response, next) => {
     const [rows] = await getPool().query<RowDataPacket[]>(
       `SELECT attempts.id, attempts.score, attempts.total_questions AS totalQuestions,
               attempts.answers_json AS answersJson, attempts.started_at AS startedAt,
+              attempts.questions_snapshot_json AS questionsSnapshotJson,
               attempts.submitted_at AS submittedAt, exams.slug AS examSlug, exams.title AS examTitle,
               exams.pass_threshold AS passThreshold
        FROM attempts
@@ -801,15 +807,19 @@ router.get("/attempts/:id/results", async (request, response, next) => {
     if (rows.length === 0) { response.status(404).json({ message: "Submitted attempt not found" }); return; }
     const attempt = rows[0];
     const answers = parseJsonField<Record<string, string>>(attempt.answersJson, {});
-    const [questionRows] = await getPool().query<RowDataPacket[]>(
-      `SELECT questions.id, questions.question_type AS questionType, questions.prompt, questions.option_a AS optionA, questions.option_b AS optionB, questions.option_c AS optionC, questions.option_d AS optionD,
-              questions.option_e AS optionE, questions.correct_answer AS correctAnswer, questions.explanation
-       FROM questions
-       INNER JOIN exams ON exams.id = questions.exam_id
-       WHERE exams.slug = ? AND questions.status = 'published'
-       ORDER BY questions.id ASC`,
-      [attempt.examSlug]
-    );
+    let questionRows = parseJsonField<RowDataPacket[]>(attempt.questionsSnapshotJson as string | null, []);
+    if (questionRows.length === 0) {
+      const [currentRows] = await getPool().query<RowDataPacket[]>(
+        `SELECT questions.id, questions.question_type AS questionType, questions.prompt, questions.option_a AS optionA, questions.option_b AS optionB, questions.option_c AS optionC, questions.option_d AS optionD,
+                questions.option_e AS optionE, questions.correct_answer AS correctAnswer, questions.explanation
+         FROM questions
+         INNER JOIN exams ON exams.id = questions.exam_id
+         WHERE exams.slug = ? AND questions.status = 'published'
+         ORDER BY questions.id ASC`,
+        [attempt.examSlug]
+      );
+      questionRows = currentRows;
+    }
     const questions = questionRows.map((q) => {
       const userAnswer = answers[String(q.id)] ?? null;
       const isCorrect = Boolean(userAnswer && q.correctAnswer && answersMatch(userAnswer, q.correctAnswer as string));
@@ -1070,13 +1080,16 @@ router.get("/performance", async (request, response, next) => {
     const [attemptRows] = await getPool().query<RowDataPacket[]>(
       `SELECT a.id, a.exam_id AS examId, a.score, a.total_questions AS totalQuestions,
               a.training_mode AS trainingMode, a.answers_json AS answersJson,
+              a.question_timings_json AS questionTimingsJson,
+              a.questions_snapshot_json AS questionsSnapshotJson,
               a.started_at AS startedAt, a.submitted_at AS submittedAt,
               e.slug AS examSlug, e.title AS examTitle, e.pass_threshold AS passThreshold,
+              e.exam_type AS examType, e.time_limit_minutes AS timeLimitMinutes,
               p.slug AS productSlug
        FROM attempts a
        INNER JOIN exams e ON e.id = a.exam_id
        INNER JOIN products p ON p.id = e.product_id
-       WHERE a.user_id = ? AND a.status = 'submitted'
+       WHERE a.user_id = ? AND a.status = 'submitted' AND a.training_mode = 0
          AND (? = '' OR p.slug = ?)
        ORDER BY a.submitted_at ASC`,
       [user.userId, productSlug, productSlug]
@@ -1102,168 +1115,62 @@ router.get("/performance", async (request, response, next) => {
       };
     });
 
-    // 2) Domain breakdown — gather all exam IDs the user attempted
-    const examIds = [...new Set(attemptRows.map((r) => Number(r.examId)))];
-    let ecoDomains: Array<{ domain: string; totalQuestions: number; correctAnswers: number; averageScore: number }> = [];
-    let performanceDomains: Array<{ domain: string; totalQuestions: number; correctAnswers: number; averageScore: number }> = [];
-    const qMap = new Map<string, { correctAnswer: string; ecoDomain: string; performanceDomain: string }>();
+    const [questionRows] = await getPool().query<RowDataPacket[]>(
+      `SELECT q.id, q.exam_id AS examId, q.correct_answer AS correctAnswer,
+              q.eco_domain AS rawEcoValue, q.performance_domain AS rawDeliveryApproach,
+              p.slug AS productSlug
+       FROM questions q
+       INNER JOIN exams e ON e.id = q.exam_id
+       INNER JOIN products p ON p.id = e.product_id
+       WHERE q.status = 'published' AND (? = '' OR p.slug = ?)`,
+      [productSlug, productSlug]
+    );
 
-    if (examIds.length > 0) {
-      // Fetch all questions for those exams
-      const [questionRows] = await getPool().query<RowDataPacket[]>(
-        `SELECT id, exam_id AS examId, correct_answer AS correctAnswer,
-                COALESCE(eco_domain, 'Uncategorized') AS ecoDomain,
-                COALESCE(performance_domain, 'Uncategorized') AS performanceDomain
-         FROM questions
-         WHERE exam_id IN (${examIds.map(() => "?").join(",")}) AND status = 'published'`,
-        examIds
-      );
-
-      // Build question lookup: questionId → { correctAnswer, ecoDomain, performanceDomain }
-      for (const q of questionRows) {
-        qMap.set(String(q.id), { correctAnswer: q.correctAnswer, ecoDomain: q.ecoDomain, performanceDomain: q.performanceDomain });
-      }
-
-      // Aggregate per-domain stats across all attempts
-      const ecoStats = new Map<string, { total: number; correct: number }>();
-      const perfStats = new Map<string, { total: number; correct: number }>();
-
-      for (const attempt of attemptRows) {
-        const answers = parseJsonField<Record<string, string>>(attempt.answersJson, {});
-        for (const [qId, selectedAnswer] of Object.entries(answers)) {
-          const q = qMap.get(qId);
-          if (!q) continue;
-          const isCorrect = answersMatch(selectedAnswer, q.correctAnswer);
-
-          // ECO domain (ecoDomain)
-          const eco = ecoStats.get(q.ecoDomain) ?? { total: 0, correct: 0 };
-          eco.total++;
-          if (isCorrect) eco.correct++;
-          ecoStats.set(q.ecoDomain, eco);
-
-          // Performance domain (performanceDomain)
-          const perf = perfStats.get(q.performanceDomain) ?? { total: 0, correct: 0 };
-          perf.total++;
-          if (isCorrect) perf.correct++;
-          perfStats.set(q.performanceDomain, perf);
-        }
-      }
-
-      ecoDomains = [...ecoStats.entries()]
-        .map(([domain, s]) => ({
-          domain,
-          totalQuestions: s.total,
-          correctAnswers: s.correct,
-          averageScore: s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0,
-        }))
-        .sort((a, b) => b.totalQuestions - a.totalQuestions);
-
-      performanceDomains = [...perfStats.entries()]
-        .map(([domain, s]) => ({
-          domain,
-          totalQuestions: s.total,
-          correctAnswers: s.correct,
-          averageScore: s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0,
-        }))
-        .sort((a, b) => b.totalQuestions - a.totalQuestions);
+    const questionIdsByExam = new Map<number, string[]>();
+    for (const row of questionRows) {
+      const examId = Number(row.examId);
+      questionIdsByExam.set(examId, [...(questionIdsByExam.get(examId) ?? []), String(row.id)]);
     }
-
-    const examAttempts = attempts.filter((attempt) => !attempt.trainingMode);
-    const recentAttempts = examAttempts.slice(-5);
-    const recentWeightTotal = recentAttempts.reduce((sum, _attempt, index) => sum + index + 1, 0);
-    const recentAverage = recentAttempts.length
-      ? Math.round(recentAttempts.reduce((sum, attempt, index) => sum + attempt.scorePercent * (index + 1), 0) / recentWeightTotal)
-      : 0;
-    const recentFive = examAttempts.slice(-5);
-    const recentFiveAverage = recentFive.length
-      ? recentFive.reduce((sum, attempt) => sum + attempt.scorePercent, 0) / recentFive.length
-      : 0;
-    const variance = recentFive.length
-      ? recentFive.reduce((sum, attempt) => sum + Math.pow(attempt.scorePercent - recentFiveAverage, 2), 0) / recentFive.length
-      : 0;
-    const consistency = Math.max(0, Math.round(100 - Math.sqrt(variance) * 3));
-    const answeredQuestionIds = new Set<string>();
-    const firstSeenQuestionIds = new Set<string>();
-    let firstSeenTotal = 0;
-    let firstSeenCorrect = 0;
-    let answeredResponses = 0;
-    let expectedResponses = 0;
-    const incorrectCounts = new Map<string, number>();
-    for (const attempt of attemptRows) {
-      if (attempt.trainingMode) continue;
-      const attemptAnswers = parseJsonField<Record<string, string>>(attempt.answersJson, {});
-      expectedResponses += Number(attempt.totalQuestions ?? 0);
-      answeredResponses += Object.keys(attemptAnswers).length;
-      for (const [id, selectedAnswer] of Object.entries(attemptAnswers)) {
-        answeredQuestionIds.add(id);
-        const question = qMap.get(id);
-        if (!question) continue;
-        const correct = answersMatch(selectedAnswer, question.correctAnswer);
-        if (!firstSeenQuestionIds.has(id)) {
-          firstSeenQuestionIds.add(id);
-          firstSeenTotal += 1;
-          if (correct) firstSeenCorrect += 1;
-        }
-        if (!correct) incorrectCounts.set(id, (incorrectCounts.get(id) ?? 0) + 1);
-      }
-    }
-    const firstSeenAccuracy = firstSeenTotal > 0 ? Math.round((firstSeenCorrect / firstSeenTotal) * 100) : 0;
-    const unansweredRate = expectedResponses > 0 ? Math.max(0, Math.round(((expectedResponses - answeredResponses) / expectedResponses) * 100)) : 0;
-    const recurringMistakes = [...incorrectCounts.values()].filter((count) => count >= 2).length;
-    const availableQuestions = examIds.length > 0
-      ? await getPool().query<RowDataPacket[]>(
-          `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id IN (${examIds.map(() => "?").join(",")}) AND status = 'published'`,
-          examIds
-        ).then(([rows]) => Number(rows[0]?.questionCount ?? 0))
-      : 0;
-    const coveragePercent = availableQuestions > 0
-      ? Math.min(100, Math.round((answeredQuestionIds.size / availableQuestions) * 100))
-      : 0;
-    const scoredDomains = ecoDomains.filter((domain) => domain.totalQuestions >= 3);
-    const domainBalance = scoredDomains.length
-      ? Math.round(scoredDomains.reduce((sum, domain) => sum + domain.averageScore, 0) / scoredDomains.length)
-      : recentAverage;
-    const calculatedReadinessScore = examAttempts.length
-      ? Math.round(recentAverage * 0.45 + coveragePercent * 0.2 + consistency * 0.15 + domainBalance * 0.2)
-      : 0;
-    const weakAreas = ecoDomains
-      .filter((domain) => domain.totalQuestions >= 3 && domain.averageScore < 70)
-      .sort((a, b) => a.averageScore - b.averageScore)
-      .slice(0, 3)
-      .map((domain) => domain.domain);
-    const confidence = examAttempts.length >= 5 && coveragePercent >= 60
-      ? "high"
-      : examAttempts.length >= 2 && coveragePercent >= 25
-        ? "medium"
-        : "low";
-    const readinessEligible = examAttempts.length >= 2 && coveragePercent >= 25;
-    const recommendations = examAttempts.length === 0
-      ? ["Complete an exam-mode attempt to establish your baseline."]
-      : [
-          ...(weakAreas.length ? [`Focus your next study session on ${weakAreas.join(", ")}.`] : ["Maintain your domain balance with mixed practice."]),
-          ...(coveragePercent < 60 ? ["Answer more unique questions to improve coverage and confidence."] : []),
-          ...(recentAverage < 75 ? ["Aim for at least 75% across three recent exam-mode attempts."] : ["Your recent scores are on track; practise under full timed conditions."]),
-        ];
+    const analyticsAttempts: AnalyticsAttempt[] = attemptRows.map((row) => {
+      const snapshotRows = parseJsonField<Array<{ id: number; correctAnswer: string; ecoDomain?: string | null; performanceDomain?: string | null }>>(row.questionsSnapshotJson, []);
+      const questionSnapshots = Object.fromEntries(snapshotRows.map((question) => [String(question.id), {
+        id: String(question.id),
+        examId: Number(row.examId),
+        productSlug: String(row.productSlug),
+        correctAnswer: String(question.correctAnswer),
+        rawEcoValue: question.ecoDomain ?? null,
+        rawDeliveryApproach: question.performanceDomain ?? null,
+      }]));
+      return ({
+      id: String(row.id),
+      examId: Number(row.examId),
+      examType: row.examType === "full_simulation" || row.examType === "quiz" ? row.examType : "section",
+      scorePercent: Number(row.totalQuestions) > 0 ? Math.round(Number(row.score) / Number(row.totalQuestions) * 100) : 0,
+      totalQuestions: Number(row.totalQuestions),
+      timeLimitMinutes: Number(row.timeLimitMinutes),
+      answers: parseJsonField<Record<string, string>>(row.answersJson, {}),
+      questionTimings: parseJsonField<Record<string, number>>(row.questionTimingsJson, {}),
+      questionOrder: seededShuffle(snapshotRows.length ? snapshotRows.map((question) => String(question.id)) : questionIdsByExam.get(Number(row.examId)) ?? [], String(row.id)),
+      questionSnapshots,
+      startedAt: new Date(row.startedAt as Date | string),
+      submittedAt: new Date(row.submittedAt as Date | string),
+    });
+    });
+    const analyticsQuestions: AnalyticsQuestion[] = questionRows.map((row) => ({
+      id: String(row.id),
+      examId: Number(row.examId),
+      productSlug: String(row.productSlug),
+      correctAnswer: String(row.correctAnswer),
+      rawEcoValue: row.rawEcoValue ? String(row.rawEcoValue) : null,
+      rawDeliveryApproach: row.rawDeliveryApproach ? String(row.rawDeliveryApproach) : null,
+    }));
+    const analytics = calculateReadiness(productSlug, analyticsAttempts, analyticsQuestions);
 
     response.json({
       attempts,
-      ecoDomains,
-      performanceDomains,
-      readiness: {
-        score: readinessEligible ? calculatedReadinessScore : null,
-        eligible: readinessEligible,
-        confidence,
-        recentAverage,
-        firstSeenAccuracy,
-        coveragePercent,
-        consistency,
-        domainBalance,
-        unansweredRate,
-        recurringMistakes,
-        weakAreas,
-        recommendations,
-        examAttemptCount: examAttempts.length,
-      },
+      ecoDomains: analytics.ecoDomains,
+      performanceDomains: analytics.deliveryApproaches,
+      readiness: analytics.readiness,
     });
   } catch (error) {
     next(error);

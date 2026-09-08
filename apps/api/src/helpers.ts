@@ -49,6 +49,7 @@ export function serializeAttemptRow(row: AttemptRow): AttemptRecord {
     startedAt: toIsoString(row.startedAt) ?? new Date().toISOString(),
     answers: parseJsonField<Record<string, string>>(row.answersJson, {}),
     markedForReview: parseJsonField<string[]>(row.markedForReviewJson, []),
+    questionTimings: parseJsonField<Record<string, number>>(row.questionTimingsJson, {}),
     trainingMode: Boolean(row.trainingMode),
     status: row.status,
     submittedAt: toIsoString(row.submittedAt)
@@ -60,13 +61,6 @@ export function parseCsvRow(line: string): string[] {
   let current = "";
   let inQuotes = false;
   
-  // Debug for first data row
-  const isDebugRow = line.includes("A technology development project has the following characteristics");
-  if (isDebugRow) {
-    console.log('[parseCsvRow] Input line length:', line.length);
-    console.log('[parseCsvRow] First 100 chars:', line.substring(0, 100));
-  }
-
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index];
 
@@ -76,17 +70,11 @@ export function parseCsvRow(line: string): string[] {
         index += 1;
       } else {
         inQuotes = !inQuotes;
-        if (isDebugRow) {
-          console.log(`[parseCsvRow] Quote at index ${index}, inQuotes now: ${inQuotes}`);
-        }
       }
       continue;
     }
 
     if (char === "," && !inQuotes) {
-      if (isDebugRow) {
-        console.log(`[parseCsvRow] Split at comma, value: "${current.substring(0, 30)}..."`);
-      }
       values.push(current.trim());
       current = "";
       continue;
@@ -96,12 +84,6 @@ export function parseCsvRow(line: string): string[] {
   }
 
   values.push(current.trim());
-  
-  if (isDebugRow) {
-    console.log('[parseCsvRow] Total values:', values.length);
-    console.log('[parseCsvRow] Value 6 (correctAnswer):', values[6]);
-    console.log('[parseCsvRow] Value 7 (explanation start):', values[7]?.substring(0, 50));
-  }
   
   return values;
 }
@@ -430,10 +412,18 @@ export async function getExamBySlug(slug: string) {
       return null;
     }
 
-    const question = sampleQuestions.find((item) => item.examId === exam.id);
+    const questions = sampleQuestions.filter((item) => item.examId === exam.id).slice(0, 5);
+    const trialQuestions = questions.map((question) => ({
+      id: question.id,
+      questionType: "single_choice" as const,
+      prompt: question.prompt,
+      options: { ...question.options },
+      imageUrl: null,
+    }));
     return {
       ...exam,
-      previewQuestion: question
+      previewQuestion: trialQuestions[0] ? { id: trialQuestions[0].id, prompt: trialQuestions[0].prompt, options: trialQuestions[0].options } : undefined,
+      trialQuestions,
     };
   }
 
@@ -441,6 +431,7 @@ export async function getExamBySlug(slug: string) {
     `SELECT exams.id, exams.product_id AS productId, exams.slug, exams.title,
             exams.time_limit_minutes AS timeLimitMinutes,
             exams.pass_threshold AS passThreshold,
+            exams.exam_type AS examType,
             (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id AND questions.status = 'published') AS questionCount,
             exams.status,
             products.slug AS productSlug
@@ -457,28 +448,35 @@ export async function getExamBySlug(slug: string) {
   }
 
   const [questionRows] = await getPool().query(
-    `SELECT id, prompt, option_a AS optionA, option_b AS optionB, option_c AS optionC, option_d AS optionD, correct_answer AS correctAnswer, explanation, image_url AS imageUrl
+    `SELECT id, question_type AS questionType, prompt, option_a AS optionA, option_b AS optionB,
+            option_c AS optionC, option_d AS optionD, option_e AS optionE, image_url AS imageUrl
      FROM questions
      WHERE exam_id = ? AND status = 'published'
-     ORDER BY RAND()
+     ORDER BY CASE WHEN id = (
+       SELECT MIN(preview_q.id) FROM questions preview_q
+       WHERE preview_q.exam_id = ? AND preview_q.status = 'published' AND preview_q.question_type = 'multiple_response'
+     ) THEN 0 ELSE 1 END, id ASC
      LIMIT 5`,
-    [exam.id]
+    [exam.id, exam.id]
   );
 
-  const questions = (questionRows as (QuestionPreviewRow & { correctAnswer: string; imageUrl?: string | null })[]);
+  const questions = questionRows as (Omit<QuestionPreviewRow, "correctAnswer" | "explanation"> & { imageUrl?: string | null })[];
 
   const trialQuestions = questions.map((q) => ({
     id: q.id,
+    questionType: q.questionType,
     prompt: q.prompt,
-    options: { A: q.optionA, B: q.optionB, C: q.optionC, D: q.optionD },
-    correctAnswer: q.correctAnswer,
-    explanation: q.explanation,
+    options: Object.fromEntries(
+      (["A", "B", "C", "D", "E"] as const)
+        .map((key) => [key, q[`option${key}` as keyof typeof q]])
+        .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
+    ),
     imageUrl: q.imageUrl || null,
   }));
 
   // Keep backward compat
   const previewQuestion = trialQuestions[0]
-    ? { id: trialQuestions[0].id, prompt: trialQuestions[0].prompt, options: trialQuestions[0].options, explanation: trialQuestions[0].explanation }
+    ? { id: trialQuestions[0].id, prompt: trialQuestions[0].prompt, options: trialQuestions[0].options }
     : undefined;
 
   return {

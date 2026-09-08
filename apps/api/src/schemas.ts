@@ -25,7 +25,13 @@ export const loginSchema = z.object({
 
 export const progressSchema = z.object({
   answers: z.record(z.string(), z.string()).default({}),
-  markedForReview: z.array(z.string()).default([])
+  markedForReview: z.array(z.string()).default([]),
+  questionTimings: z.record(z.string(), z.coerce.number().int().min(0).max(86_400)).default({})
+});
+
+export const attemptSubmitSchema = z.object({
+  answers: z.record(z.string(), z.string()).default({}),
+  questionTimings: z.record(z.string(), z.coerce.number().int().min(0).max(86_400)).default({})
 });
 
 export const checkoutSchema = z.object({
@@ -111,6 +117,7 @@ export const examCreateSchema = z.object({
   title: z.string().min(2).max(255),
   timeLimitMinutes: z.coerce.number().int().positive(),
   passThreshold: z.coerce.number().int().min(0).max(100),
+  examType: z.enum(["quiz", "section", "full_simulation"]).default("section"),
   status: z.enum(["draft", "published"]).default("draft")
 });
 

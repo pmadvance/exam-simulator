@@ -31,11 +31,11 @@ export default function PrivacyPage() {
           </section>
           <section>
             <h2 className="h5 fw-semibold">Your PDPA Requests</h2>
-            <p className="mb-0">You may request access, correction, deletion, or withdrawal of consent through My Account or by contacting info@pmadvance.com. Some records may need to be retained where required for legal, financial, security, or legitimate business reasons.</p>
+            <p className="mb-0">You may request access, correction, deletion, or withdrawal of consent through My Account or by contacting info@pmexampro.com. Some records may need to be retained where required for legal, financial, security, or legitimate business reasons.</p>
           </section>
           <section>
             <h2 className="h5 fw-semibold">Contact</h2>
-            <p className="mb-0">For privacy questions, contact PM Exam Pro at info@pmadvance.com.</p>
+            <p className="mb-0">For privacy questions, contact PM Exam Pro at info@pmexampro.com.</p>
           </section>
         </div>
       </section>

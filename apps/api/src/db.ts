@@ -24,6 +24,8 @@ const runtimeSchemaStatements = [
     training_mode TINYINT(1) NOT NULL DEFAULT 0,
     answers_json JSON NOT NULL,
     marked_for_review_json JSON NOT NULL,
+    question_timings_json JSON NULL,
+    questions_snapshot_json JSON NULL,
     score INT NULL,
     total_questions INT NOT NULL,
     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,13 +77,20 @@ const runtimeSchemaStatements = [
     import_batch_id CHAR(36) NULL,
     version_no INT NOT NULL,
     question_order INT NOT NULL,
+    question_type ENUM('single_choice','multiple_response','true_false') NOT NULL DEFAULT 'single_choice',
     prompt TEXT NOT NULL,
     option_a TEXT NOT NULL,
     option_b TEXT NOT NULL,
     option_c TEXT NOT NULL,
     option_d TEXT NOT NULL,
-    correct_answer CHAR(1) NOT NULL,
+    option_e TEXT NULL,
+    correct_answer VARCHAR(10) NOT NULL,
     explanation TEXT NOT NULL,
+    eco_domain VARCHAR(120) NULL,
+    performance_domain VARCHAR(120) NULL,
+    image_url VARCHAR(500) NULL,
+    status ENUM('draft','published') NOT NULL DEFAULT 'published',
+    difficulty VARCHAR(20) NULL,
     created_by BIGINT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_question_versions_exam FOREIGN KEY (exam_id) REFERENCES exams(id),
@@ -261,8 +270,11 @@ const runtimeAlterStatements = [
   `ALTER TABLE users ADD COLUMN age INT NULL AFTER full_name`,
   `ALTER TABLE users ADD COLUMN occupation VARCHAR(120) NULL AFTER age`,
   `ALTER TABLE users ADD COLUMN gender VARCHAR(40) NULL AFTER occupation`,
+  `ALTER TABLE users ADD COLUMN onboarding_completed_at TIMESTAMP NULL AFTER gender`,
   `ALTER TABLE questions ADD COLUMN difficulty VARCHAR(20) NULL AFTER status`,
   `ALTER TABLE question_versions ADD COLUMN difficulty VARCHAR(20) NULL`,
+  `ALTER TABLE question_versions ADD COLUMN image_url VARCHAR(500) NULL AFTER performance_domain`,
+  `ALTER TABLE question_versions ADD COLUMN status ENUM('draft','published') NOT NULL DEFAULT 'published' AFTER image_url`,
   `ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP NULL AFTER password_hash`,
   `ALTER TABLE enrollments ADD COLUMN starts_at TIMESTAMP NULL AFTER product_id`,
   `ALTER TABLE enrollments ADD COLUMN expires_at TIMESTAMP NULL AFTER starts_at`,
@@ -273,6 +285,32 @@ const runtimeAlterStatements = [
   `ALTER TABLE users ADD COLUMN privacy_notice_version VARCHAR(40) NULL AFTER privacy_accepted_at`,
   `ALTER TABLE users ADD COLUMN terms_accepted_at TIMESTAMP NULL AFTER privacy_notice_version`,
   `ALTER TABLE users ADD COLUMN terms_version VARCHAR(40) NULL AFTER terms_accepted_at`,
+  `ALTER TABLE exams ADD COLUMN exam_type ENUM('quiz','section','full_simulation') NOT NULL DEFAULT 'section' AFTER pass_threshold`,
+  `ALTER TABLE attempts ADD COLUMN question_timings_json JSON NULL AFTER marked_for_review_json`,
+  `ALTER TABLE attempts ADD COLUMN questions_snapshot_json JSON NULL AFTER question_timings_json`,
+] as const;
+
+const runtimeDataStatements = [
+  `UPDATE users SET onboarding_completed_at = COALESCE(onboarding_completed_at, updated_at)
+   WHERE role = 'student' AND onboarding_completed_at IS NULL
+     AND (age IS NOT NULL OR occupation IS NOT NULL OR gender IS NOT NULL)`,
+  `UPDATE products
+   SET description = 'Practice exams aligned to the current PMP Examination Content Outline, with situational questions across People, Process, and Business Environment. Includes timed practice, answer explanations, and performance insights.'
+   WHERE slug = 'pmp-exam-preparation-practice-pack'
+     AND (description LIKE CONCAT('%PM', 'Advance%') OR description LIKE CONCAT('%PM ', 'Advance%') OR description LIKE '%1,000-question%')`,
+  `UPDATE products
+   SET description = 'Practice exams for the CAPM certification covering project management fundamentals, predictive methods, agile approaches, and business analysis. Includes timed practice, answer explanations, and performance insights.'
+   WHERE slug = 'capm-exam-preparation-practice-pack'
+     AND (description LIKE CONCAT('%PM', 'Advance%') OR description LIKE CONCAT('%PM ', 'Advance%'))`,
+  `UPDATE exams e
+   INNER JOIN (SELECT exam_id, COUNT(*) AS question_count FROM questions WHERE status = 'published' GROUP BY exam_id) q ON q.exam_id = e.id
+   SET e.exam_type = CASE WHEN q.question_count >= 100 THEN 'full_simulation' WHEN q.question_count <= 30 THEN 'quiz' ELSE 'section' END
+   WHERE e.exam_type = 'section'`,
+  `UPDATE exams e
+   INNER JOIN products p ON p.id = e.product_id
+   INNER JOIN (SELECT exam_id, COUNT(*) AS question_count FROM questions WHERE status = 'published' GROUP BY exam_id) q ON q.exam_id = e.id
+   SET e.time_limit_minutes = CEIL(q.question_count * CASE WHEN p.slug LIKE '%capm%' THEN 1.2 ELSE 1.333333 END)
+   WHERE e.time_limit_minutes = 180 AND q.question_count < 100`,
 ] as const;
 
 export function getPool() {
@@ -318,6 +356,9 @@ export async function ensureDatabaseTables() {
         } catch {
           // Column likely already exists — safe to ignore
         }
+      }
+      for (const statement of runtimeDataStatements) {
+        await getPool().execute(statement);
       }
     })().catch((error) => {
       schemaReadyPromise = null;

@@ -12,6 +12,12 @@ interface ExamsContentProps {
   products: AdminProduct[];
 }
 
+type ExamForm = { slug: string; title: string; productId: string; timeLimitMinutes: string; passThreshold: string; examType: "quiz" | "section" | "full_simulation"; status: "draft" | "published" };
+
+function emptyExamForm(productId: string): ExamForm {
+  return { slug: "", title: "", productId, timeLimitMinutes: "60", passThreshold: "70", examType: "section", status: "draft" };
+}
+
 export function ExamsContent({ initialExams, products }: ExamsContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -20,7 +26,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [showExamForm, setShowExamForm] = useState(false);
   const [editingExam, setEditingExam] = useState<AdminExam | null>(null);
-  const [examForm, setExamForm] = useState<{ slug: string; title: string; productId: string; timeLimitMinutes: string; passThreshold: string; status: "draft" | "published" }>({ slug: "", title: "", productId: products[0]?.id?.toString() ?? "1", timeLimitMinutes: "180", passThreshold: "70", status: "draft" });
+  const [examForm, setExamForm] = useState<ExamForm>(emptyExamForm(products[0]?.id?.toString() ?? "1"));
   const [examFilterProductId, setExamFilterProductId] = useState<number | "all">("all");
   const [examFilterStatus, setExamFilterStatus] = useState<"all" | "draft" | "published">("all");
   const [viewMode, setViewMode] = useState<"list" | "cards">("list");
@@ -109,7 +115,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
       if (editingExam) {
         const updated = await browserApiFetch<AdminExam>(
           "/api/admin/exams/" + editingExam.id,
-          { method: "PATCH", body: JSON.stringify({ title: examForm.title, timeLimitMinutes: Number(examForm.timeLimitMinutes), passThreshold: Number(examForm.passThreshold), status: examForm.status }) },
+          { method: "PATCH", body: JSON.stringify({ title: examForm.title, timeLimitMinutes: Number(examForm.timeLimitMinutes), passThreshold: Number(examForm.passThreshold), examType: examForm.examType, status: examForm.status }) },
         );
         setExams((e) => e.map((x) => x.id === editingExam.id ? { ...x, ...updated } : x));
         setStatusMessage('Test "' + updated.title + '" updated.');
@@ -119,6 +125,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
           productId: Number(examForm.productId),
           timeLimitMinutes: Number(examForm.timeLimitMinutes),
           passThreshold: Number(examForm.passThreshold),
+          examType: examForm.examType,
           status: examForm.status,
         };
         const created = await browserApiFetch<AdminExam>("/api/admin/exams", {
@@ -130,7 +137,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
       }
       setShowExamForm(false);
       setEditingExam(null);
-      setExamForm({ slug: "", title: "", productId: products[0]?.id?.toString() ?? "1", timeLimitMinutes: "180", passThreshold: "70", status: "draft" });
+      setExamForm(emptyExamForm(products[0]?.id?.toString() ?? "1"));
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Failed to save test.");
     } finally {
@@ -201,6 +208,15 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
                   <input type="number" className="form-control form-control-sm" min="0" max="100" value={examForm.passThreshold} onChange={(e) => setExamForm({ ...examForm, passThreshold: e.target.value })} required />
                 </div>
                 <div className="col-md-4">
+                  <label className="form-label small fw-semibold">Test Type</label>
+                  <select className="form-select form-select-sm" value={examForm.examType} onChange={(e) => setExamForm({ ...examForm, examType: e.target.value as ExamForm["examType"] })}>
+                    <option value="quiz">Quiz</option>
+                    <option value="section">Section practice</option>
+                    <option value="full_simulation">Full simulation</option>
+                  </select>
+                  <div className="form-text">Only full simulations contribute to the readiness score.</div>
+                </div>
+                <div className="col-md-4">
                   <label className="form-label small fw-semibold">Status</label>
                   <select className="form-select form-select-sm" value={examForm.status} onChange={(e) => setExamForm({ ...examForm, status: e.target.value as "draft" | "published" })}>
                     <option value="draft">Draft</option>
@@ -267,7 +283,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
               <i className="bi bi-grid"></i>
             </button>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditingExam(null); setExamForm({ slug: "", title: "", productId: products[0]?.id?.toString() ?? "1", timeLimitMinutes: "180", passThreshold: "70", status: "draft" }); setShowExamForm(true); }} disabled={busy}>
+          <button className="btn btn-primary btn-sm" onClick={() => { setEditingExam(null); setExamForm(emptyExamForm(products[0]?.id?.toString() ?? "1")); setShowExamForm(true); }} disabled={busy}>
             <i className="bi bi-plus-lg me-1"></i>Create Test
           </button>
         </div>
@@ -328,7 +344,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
                         >
                           <i className="bi bi-play-fill"></i>
                         </button>
-                        <button className="btn btn-outline-primary btn-sm" onClick={() => { setEditingExam(e); setExamForm({ slug: e.slug, title: e.title, productId: String(e.productId), timeLimitMinutes: String(e.timeLimitMinutes), passThreshold: String(e.passThreshold), status: e.status }); setShowExamForm(true); }} disabled={busy}>
+                        <button className="btn btn-outline-primary btn-sm" onClick={() => { setEditingExam(e); setExamForm({ slug: e.slug, title: e.title, productId: String(e.productId), timeLimitMinutes: String(e.timeLimitMinutes), passThreshold: String(e.passThreshold), examType: e.examType ?? "section", status: e.status }); setShowExamForm(true); }} disabled={busy}>
                           <i className="bi bi-pencil"></i>
                         </button>
                         <button className="btn btn-outline-secondary btn-sm" onClick={() => toggleExamStatus(e.id, e.status)} disabled={busy}>
@@ -383,7 +399,7 @@ export function ExamsContent({ initialExams, products }: ExamsContentProps) {
                     >
                       <i className="bi bi-play-fill me-1"></i>Preview
                     </button>
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => { setEditingExam(e); setExamForm({ slug: e.slug, title: e.title, productId: String(e.productId), timeLimitMinutes: String(e.timeLimitMinutes), passThreshold: String(e.passThreshold), status: e.status }); setShowExamForm(true); }} disabled={busy}>
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => { setEditingExam(e); setExamForm({ slug: e.slug, title: e.title, productId: String(e.productId), timeLimitMinutes: String(e.timeLimitMinutes), passThreshold: String(e.passThreshold), examType: e.examType ?? "section", status: e.status }); setShowExamForm(true); }} disabled={busy}>
                       <i className="bi bi-pencil me-1"></i>Edit
                     </button>
                     <button className="btn btn-sm btn-outline-secondary" onClick={() => toggleExamStatus(e.id, e.status)} disabled={busy}>

@@ -9,7 +9,7 @@ import { CurrencyProvider } from "../lib/currency";
 
 export const metadata: Metadata = {
   title: "PM Exam Pro",
-  description: "Practice exams for PMP®, CAPM®, PMI-RMP®, PMI-ACP® and project management training by PM Exam Pro — PMI Authorized Training Partner #4930.",
+  description: "Project management certification practice exams and training by PM Exam Pro — PMI Authorized Training Partner #4930.",
   icons: { icon: "/icon.svg" },
 };
 

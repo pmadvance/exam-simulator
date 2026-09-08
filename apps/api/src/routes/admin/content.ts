@@ -17,6 +17,39 @@ import { env } from "../../config.js";
 import { invalidatePublishedQuestions } from "../../services/question-cache.js";
 import { z } from "zod";
 import crypto from "crypto";
+import { classifyEcoDomain, normalizeDeliveryApproach } from "../../analytics/readiness.js";
+
+function taxonomyIssue(productSlug: string, ecoDomain: unknown, performanceDomain: unknown) {
+  if (!/(?:^|-)pmp(?:-|$)|capm/i.test(productSlug)) return null;
+  if (!classifyEcoDomain(productSlug, typeof ecoDomain === "string" ? ecoDomain : null)) return "Use a valid official ECO domain or task code.";
+  if (!normalizeDeliveryApproach(typeof performanceDomain === "string" ? performanceDomain : null)) return "Choose Predictive, Adaptive/Agile, Hybrid, or Agnostic as the delivery approach.";
+  return null;
+}
+
+async function examTaxonomyIssue(examId: number) {
+  const [rows] = await getPool().query<RowDataPacket[]>(
+    `SELECT p.slug AS productSlug, q.eco_domain AS ecoDomain, q.performance_domain AS performanceDomain
+     FROM exams e INNER JOIN products p ON p.id = e.product_id
+     INNER JOIN questions q ON q.exam_id = e.id AND q.status = 'published'
+     WHERE e.id = ?`,
+    [examId]
+  );
+  for (const row of rows) {
+    const issue = taxonomyIssue(String(row.productSlug), row.ecoDomain, row.performanceDomain);
+    if (issue) return issue;
+  }
+  return null;
+}
+
+async function importedTaxonomyIssue(examId: number, records: Array<{ status: string; ecoDomain: string | null; performanceDomain: string | null }>) {
+  const [rows] = await getPool().query<RowDataPacket[]>(
+    `SELECT p.slug AS productSlug FROM exams e INNER JOIN products p ON p.id = e.product_id WHERE e.id = ? LIMIT 1`,
+    [examId]
+  );
+  const productSlug = String(rows[0]?.productSlug ?? "");
+  const index = records.findIndex((record) => record.status === "published" && taxonomyIssue(productSlug, record.ecoDomain, record.performanceDomain));
+  return index < 0 ? null : `Row ${index + 2}: ${taxonomyIssue(productSlug, records[index].ecoDomain, records[index].performanceDomain)}`;
+}
 
 // ── multer setup for image uploads ──
 const storage = multer.diskStorage({
@@ -164,6 +197,7 @@ router.get("/exams", async (_request, response, next) => {
       `SELECT exams.id, exams.product_id AS productId, exams.slug, exams.title,
               exams.time_limit_minutes AS timeLimitMinutes,
               exams.pass_threshold AS passThreshold,
+              exams.exam_type AS examType,
               (SELECT COUNT(*) FROM questions WHERE questions.exam_id = exams.id) AS questionCount,
               exams.status
        FROM exams
@@ -213,6 +247,12 @@ router.get("/questions", async (request, response, next) => {
 router.post("/questions", async (request, response, next) => {
   try {
     const payload = questionCreateSchema.parse(request.body);
+    const [productRows] = await getPool().query<RowDataPacket[]>(
+      `SELECT p.slug AS productSlug FROM exams e INNER JOIN products p ON p.id = e.product_id WHERE e.id = ? LIMIT 1`,
+      [payload.examId]
+    );
+    const issue = payload.status === "published" ? taxonomyIssue(String(productRows[0]?.productSlug ?? ""), payload.ecoDomain, payload.performanceDomain) : null;
+    if (issue) { response.status(409).json({ message: issue }); return; }
     const [result] = await getPool().execute(
       `INSERT INTO questions (exam_id, question_type, prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation, eco_domain, performance_domain, image_url, difficulty, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -231,11 +271,20 @@ router.patch("/questions/:id", async (request, response, next) => {
   try {
     const payload = questionUpdateSchema.parse(request.body);
     const [questionRows] = await getPool().query<RowDataPacket[]>(
-      `SELECT exam_id AS examId FROM questions WHERE id = ? LIMIT 1`,
+      `SELECT q.exam_id AS examId, q.status, q.eco_domain AS ecoDomain, q.performance_domain AS performanceDomain,
+              p.slug AS productSlug
+       FROM questions q INNER JOIN exams e ON e.id = q.exam_id INNER JOIN products p ON p.id = e.product_id
+       WHERE q.id = ? LIMIT 1`,
       [request.params.id]
     );
     const examId = Number(questionRows[0]?.examId ?? 0);
     if (!examId) { response.status(404).json({ message: "Question not found" }); return; }
+    const existing = questionRows[0];
+    const nextStatus = payload.status ?? existing.status;
+    const issue = nextStatus === "published"
+      ? taxonomyIssue(String(existing.productSlug), payload.ecoDomain ?? existing.ecoDomain, payload.performanceDomain ?? existing.performanceDomain)
+      : null;
+    if (issue) { response.status(409).json({ message: issue }); return; }
     if (payload.status === "draft" && await isPublishedExam(examId)) {
       const [publishedRows] = await getPool().query<RowDataPacket[]>(
         `SELECT COUNT(*) AS questionCount FROM questions WHERE exam_id = ? AND status = 'published' AND id <> ?`,
@@ -398,15 +447,8 @@ router.post("/questions/upload-csv", async (request, response, next) => {
       csv: z.string().min(10),
     }).parse(request.body);
 
-    console.log(`[CSV Import] Received ${csv.length} chars for exam ${examId}`);
-
     // Use the unified parser
     const parsed = parseQuestionCsv(csv);
-    
-    console.log(`[CSV Import] Parsed ${parsed.records.length} records, skipped ${parsed.skippedRows} rows`);
-    if (parsed.skipReasons.length > 0) {
-      console.log(`[CSV Import] Skip reasons:`, parsed.skipReasons);
-    }
     
     if (parsed.records.length === 0) {
       response.status(400).json({ 
@@ -416,6 +458,8 @@ router.post("/questions/upload-csv", async (request, response, next) => {
       });
       return;
     }
+    const classificationIssue = await importedTaxonomyIssue(examId, parsed.records);
+    if (classificationIssue) { response.status(409).json({ message: classificationIssue }); return; }
 
     // Bulk insert
     const pool = getPool();
@@ -431,19 +475,13 @@ router.post("/questions/upload-csv", async (request, response, next) => {
           [examId, r.questionType, r.prompt, r.optionA, r.optionB, r.optionC, r.optionD, r.optionE, r.correctAnswer, r.explanation, r.ecoDomain, r.performanceDomain, r.imageUrl, r.status, r.difficulty]
         );
         inserted++;
-        if (i < 5 || i === parsed.records.length - 1) {
-          console.log(`[CSV Import] Inserted row ${i + 1}/${parsed.records.length}: ${r.prompt.substring(0, 50)}...`);
-        }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         insertErrors.push(`Row ${i + 1}: ${errorMsg}`);
-        console.error(`[CSV Import] Error on row ${i + 1}: ${errorMsg}`);
         // Continue with next record
       }
     }
     
-    console.log(`[CSV Import] Complete: ${inserted}/${parsed.records.length} inserted, ${insertErrors.length} errors`);
-
     if (inserted > 0) invalidatePublishedQuestions(examId);
     await writeAuditLog(response.locals.user.userId, "admin.questions.csv-upload", "exam", String(examId), { inserted, attempted: parsed.records.length });
     response.json({ 
@@ -513,6 +551,8 @@ router.post("/questions/upload-xlsx", xlsxUpload.single("file"), async (request,
       });
       return;
     }
+    const classificationIssue = await importedTaxonomyIssue(examId, parsed.records);
+    if (classificationIssue) { response.status(409).json({ message: classificationIssue }); return; }
 
     const connection = await getPool().getConnection();
     let inserted = 0;
@@ -582,9 +622,9 @@ router.post("/exams", async (request, response, next) => {
     }
     const slug = payload.slug || await generateUniqueSlug(payload.title, "exams");
     const [result] = await getPool().execute(
-      `INSERT INTO exams (product_id, slug, title, time_limit_minutes, pass_threshold, status)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [payload.productId, slug, payload.title, payload.timeLimitMinutes, payload.passThreshold, payload.status]
+      `INSERT INTO exams (product_id, slug, title, time_limit_minutes, pass_threshold, exam_type, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [payload.productId, slug, payload.title, payload.timeLimitMinutes, payload.passThreshold, payload.examType, payload.status]
     );
     const examId = (result as { insertId: number }).insertId;
     await writeAuditLog(response.locals.user.userId, "admin.exam.created", "exam", String(examId), { ...payload, slug });
@@ -599,7 +639,11 @@ router.patch("/exams/:id", async (request, response, next) => {
       response.status(409).json({ message: "An exam needs at least one published question before it can be published." });
       return;
     }
-    const columnMap: Record<string, string> = { timeLimitMinutes: "time_limit_minutes", passThreshold: "pass_threshold" };
+    if (payload.status === "published") {
+      const issue = await examTaxonomyIssue(Number(request.params.id));
+      if (issue) { response.status(409).json({ message: `Resolve question classification before publishing. ${issue}` }); return; }
+    }
+    const columnMap: Record<string, string> = { timeLimitMinutes: "time_limit_minutes", passThreshold: "pass_threshold", examType: "exam_type" };
     const sets: string[] = [];
     const vals: (string | number | null)[] = [];
     for (const [key, value] of Object.entries(payload)) {
@@ -622,6 +666,10 @@ router.patch("/exams/:id/status", async (request, response, next) => {
     if (status === "published" && !(await examHasPublishedQuestions(Number(request.params.id)))) {
       response.status(409).json({ message: "An exam needs at least one published question before it can be published." });
       return;
+    }
+    if (status === "published") {
+      const issue = await examTaxonomyIssue(Number(request.params.id));
+      if (issue) { response.status(409).json({ message: `Resolve question classification before publishing. ${issue}` }); return; }
     }
     const [result] = await getPool().execute(`UPDATE exams SET status = ? WHERE id = ?`, [status, request.params.id]);
     if ((result as { affectedRows: number }).affectedRows === 0) { response.status(404).json({ message: "Exam not found" }); return; }
@@ -774,6 +822,8 @@ router.post("/questions/import/preview", async (request, response, next) => {
     }
 
     const parsed = parseQuestionCsv(payload.csv);
+    const classificationIssue = await importedTaxonomyIssue(examId, parsed.records);
+    if (classificationIssue) { response.status(409).json({ message: classificationIssue }); return; }
     const [existingRows] = await getPool().query<RowDataPacket[]>(
       `SELECT prompt,
               option_a AS optionA,
@@ -932,6 +982,8 @@ router.post("/questions/import/apply", async (request, response, next) => {
     }
 
     const parsed = parseQuestionCsv(batch.csvText as string);
+    const classificationIssue = await importedTaxonomyIssue(Number(batch.examId), parsed.records);
+    if (classificationIssue) { response.status(409).json({ message: classificationIssue }); return; }
     const connection = await getPool().getConnection();
     try {
       await connection.beginTransaction();
@@ -945,14 +997,15 @@ router.post("/questions/import/apply", async (request, response, next) => {
       const nextVersion = Number(versionRows[0]?.maxVersion ?? 0) + 1;
 
       const [existingRows] = await connection.query<RowDataPacket[]>(
-        `SELECT prompt,
+        `SELECT question_type AS questionType, prompt,
                 option_a AS optionA,
                 option_b AS optionB,
                 option_c AS optionC,
                 option_d AS optionD,
                 option_e AS optionE,
-                correct_answer AS correctAnswer,
-                explanation
+                correct_answer AS correctAnswer, explanation,
+                eco_domain AS ecoDomain, performance_domain AS performanceDomain,
+                image_url AS imageUrl, status, difficulty
          FROM questions
          WHERE exam_id = ?
          ORDER BY id ASC`,
@@ -964,14 +1017,16 @@ router.post("/questions/import/apply", async (request, response, next) => {
         await connection.execute(
           `INSERT INTO question_versions (
              exam_id, import_batch_id, version_no, question_order,
-             prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation, created_by
+             question_type, prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation,
+             eco_domain, performance_domain, image_url, status, difficulty, created_by
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             batch.examId,
             batch.id,
             nextVersion,
             index + 1,
+            question.questionType,
             question.prompt,
             question.optionA,
             question.optionB,
@@ -980,6 +1035,11 @@ router.post("/questions/import/apply", async (request, response, next) => {
             question.optionE,
             question.correctAnswer,
             question.explanation,
+            question.ecoDomain,
+            question.performanceDomain,
+            question.imageUrl,
+            question.status,
+            question.difficulty,
             response.locals.user.userId
           ]
         );
@@ -1040,6 +1100,8 @@ router.post("/questions/import", async (request, response, next) => {
       response.status(404).json({ message: "Exam not found" });
       return;
     }
+    const classificationIssue = await importedTaxonomyIssue(examId, parsed.records);
+    if (classificationIssue) { response.status(409).json({ message: classificationIssue }); return; }
 
     const connection = await getPool().getConnection();
     try {
@@ -1092,15 +1154,15 @@ router.post("/questions/rollback", async (request, response, next) => {
     }
 
     const [versionRows] = await getPool().query<RowDataPacket[]>(
-      `SELECT question_order AS questionOrder,
-              prompt,
+      `SELECT question_order AS questionOrder, question_type AS questionType, prompt,
               option_a AS optionA,
               option_b AS optionB,
               option_c AS optionC,
               option_d AS optionD,
               option_e AS optionE,
-              correct_answer AS correctAnswer,
-              explanation
+              correct_answer AS correctAnswer, explanation,
+              eco_domain AS ecoDomain, performance_domain AS performanceDomain,
+              image_url AS imageUrl, status, difficulty
        FROM question_versions
        WHERE exam_id = ? AND version_no = ?
        ORDER BY question_order ASC`,
@@ -1111,6 +1173,12 @@ router.post("/questions/rollback", async (request, response, next) => {
       response.status(404).json({ message: "Version not found" });
       return;
     }
+    const classificationIssue = await importedTaxonomyIssue(examId, versionRows.map((row) => ({
+      status: String(row.status),
+      ecoDomain: row.ecoDomain ? String(row.ecoDomain) : null,
+      performanceDomain: row.performanceDomain ? String(row.performanceDomain) : null,
+    })));
+    if (classificationIssue) { response.status(409).json({ message: `This saved version needs classification before it can be restored. ${classificationIssue}` }); return; }
 
     const connection = await getPool().getConnection();
     try {
@@ -1125,14 +1193,15 @@ router.post("/questions/rollback", async (request, response, next) => {
       const backupVersion = Number(nextRows[0]?.maxVersion ?? 0) + 1;
 
       const [currentRows] = await connection.query<RowDataPacket[]>(
-        `SELECT prompt,
+        `SELECT question_type AS questionType, prompt,
                 option_a AS optionA,
                 option_b AS optionB,
                 option_c AS optionC,
                 option_d AS optionD,
                 option_e AS optionE,
-                correct_answer AS correctAnswer,
-                explanation
+                correct_answer AS correctAnswer, explanation,
+                eco_domain AS ecoDomain, performance_domain AS performanceDomain,
+                image_url AS imageUrl, status, difficulty
          FROM questions
          WHERE exam_id = ?
          ORDER BY id ASC`,
@@ -1144,13 +1213,15 @@ router.post("/questions/rollback", async (request, response, next) => {
         await connection.execute(
           `INSERT INTO question_versions (
              exam_id, import_batch_id, version_no, question_order,
-             prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation, created_by
+             question_type, prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation,
+             eco_domain, performance_domain, image_url, status, difficulty, created_by
            )
-           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             examId,
             backupVersion,
             index + 1,
+            question.questionType,
             question.prompt,
             question.optionA,
             question.optionB,
@@ -1159,6 +1230,11 @@ router.post("/questions/rollback", async (request, response, next) => {
             question.optionE,
             question.correctAnswer,
             question.explanation,
+            question.ecoDomain,
+            question.performanceDomain,
+            question.imageUrl,
+            question.status,
+            question.difficulty,
             response.locals.user.userId
           ]
         );
@@ -1167,9 +1243,9 @@ router.post("/questions/rollback", async (request, response, next) => {
       await connection.execute(`DELETE FROM questions WHERE exam_id = ?`, [examId]);
       for (const question of versionRows) {
         await connection.execute(
-          `INSERT INTO questions (exam_id, prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [examId, question.prompt, question.optionA, question.optionB, question.optionC, question.optionD, question.optionE, question.correctAnswer, question.explanation]
+          `INSERT INTO questions (exam_id, question_type, prompt, option_a, option_b, option_c, option_d, option_e, correct_answer, explanation, eco_domain, performance_domain, image_url, status, difficulty)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [examId, question.questionType, question.prompt, question.optionA, question.optionB, question.optionC, question.optionD, question.optionE, question.correctAnswer, question.explanation, question.ecoDomain, question.performanceDomain, question.imageUrl, question.status, question.difficulty]
         );
       }
 

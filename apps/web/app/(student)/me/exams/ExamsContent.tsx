@@ -13,6 +13,7 @@ type ExamInfo = {
   title: string;
   timeLimitMinutes: number;
   passThreshold: number;
+  examType?: "quiz" | "section" | "full_simulation";
   questionCount: number;
   status?: string;
 };
@@ -184,6 +185,7 @@ export function ExamsContent() {
               const inProgress = summary?.inProgress;
               const attemptCount = summary?.submittedCount ?? 0;
               const isReady = exam.questionCount > 0;
+              const testTypeLabel = exam.examType === "full_simulation" ? "Full simulation" : exam.examType === "quiz" ? "Quiz" : "Section practice";
 
               return (
                 <div
@@ -197,7 +199,7 @@ export function ExamsContent() {
                     <i className={`bi ${hasInProgress ? "bi-play-circle" : "bi-pencil-square"}`} style={{ color: hasInProgress ? "#D97706" : PRIMARY, fontSize: 18 }}></i>
                   </div>
                   <div className="flex-grow-1">
-                    <span className="fw-semibold d-block">{exam.title}</span>
+                    <span className="fw-semibold d-block">{exam.title} <span className="badge text-bg-light border ms-1" style={{ fontSize: 10 }}>{testTypeLabel}</span></span>
                     <small className="text-muted">
                       {exam.questionCount} question{exam.questionCount !== 1 ? "s" : ""} &middot; {exam.timeLimitMinutes} min &middot; Pass: {exam.passThreshold}%
                       {attemptCount > 0 && (
