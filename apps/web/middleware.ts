@@ -76,6 +76,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Keep first-time visitors out of the authenticated learner tree before any
+  // client components mount and issue protected API requests. A refresh cookie
+  // is enough to continue because browserApiFetch can renew an expired access
+  // token after the page loads.
+  if (pathname.startsWith("/me")) {
+    const accessCookie = request.cookies.get("pm_access")?.value;
+    const refreshCookie = request.cookies.get("pm_refresh")?.value;
+
+    if (!accessCookie && !refreshCookie) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   try {
     const response = await fetch(`${INTERNAL_API_URL}/api/maintenance-status`, {
       cache: "no-store",
