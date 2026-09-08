@@ -100,3 +100,4 @@ Multiple-response questions now derive their required selection count from the c
 - The public payload contains only `requiredSelectionCount`; it does not contain the correct choices or explanation.
 - Desktop and mobile browser regression checks passed for a five-option question requiring three selections: selection stopped at three, two choices were disabled, and all choices became available after deselection.
 - Automated coverage verifies both two-answer and three-answer keys.
+- The post-deployment production regression passed for a five-option question requiring two selections on desktop and mobile: selection stopped at two, the remaining three choices were disabled, deselection restored them, no browser/runtime errors occurred, and the preview payload exposed no answer or explanation.
