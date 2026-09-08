@@ -70,4 +70,4 @@ Official references:
 - Database-backed local browser audit: desktop and 320 px mobile routes passed with no horizontal overflow, page errors, broken requests, or anonymous 401 responses in the final focused check.
 - Multiple-response preview check: five options exposed with five checkbox semantics, clear multi-select instruction, server-side completion, and no answer data in the initial payload.
 - Live payment test: intentionally excluded.
-- Production browser audit: to be recorded after deployment in the client verification document.
+- Production browser audit: passed across 26 clean-profile desktop/mobile route and state checks. See `POST-REMEDIATION-VERIFICATION-AUDIT-2026-09-08.md`.

@@ -40,4 +40,4 @@ The system no longer guesses ambiguous question classifications. Existing questi
 
 ## Acceptance status
 
-Local automated tests, production build checks, desktop browser checks, and 320 px mobile browser checks passed. Payment testing was excluded by instruction. Final production acceptance results will be appended after deployment and the repeated browser audit.
+Local automated tests, production build checks, desktop browser checks, and 320 px mobile browser checks passed. The repeated production audit also passed across 26 clean-profile route and state checks. Payment testing was excluded by instruction. See `CLIENT-POST-REMEDIATION-VERIFICATION-2026-09-08.md` for the client-ready acceptance summary and remaining content actions.
