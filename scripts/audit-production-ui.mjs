@@ -31,7 +31,14 @@ for (const viewport of [
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  page.on("requestfailed", (request) => failedRequests.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "failed"}`));
+  page.on("requestfailed", (request) => {
+    const errorText = request.failure()?.errorText ?? "failed";
+    // Next.js cancels outstanding RSC prefetches when the audit deliberately
+    // navigates to the next route. Chromium reports those cancellations as
+    // ERR_ABORTED even though no user-visible request failed.
+    if (errorText === "net::ERR_ABORTED") return;
+    failedRequests.push(`${request.method()} ${request.url()}: ${errorText}`);
+  });
 
   for (const route of routes) {
     pageErrors.length = 0;
