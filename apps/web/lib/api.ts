@@ -43,6 +43,7 @@ export type ProductCard = {
 export type TrialQuestion = {
   id?: number;
   questionType: "single_choice" | "multiple_response" | "true_false";
+  requiredSelectionCount?: number;
   prompt: string;
   options: Record<string, string>;
   imageUrl?: string | null;

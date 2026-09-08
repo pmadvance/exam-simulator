@@ -87,6 +87,28 @@ for (const viewport of [
           checkboxCount: document.querySelectorAll('.optionButton[role="checkbox"], .optionButton input[type="checkbox"]').length,
           overflowX: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
         }));
+        if (trial.checkboxCount > 0) {
+          const optionButtons = await page.$$(".optionButton");
+          for (const optionButton of optionButtons) await optionButton.click();
+          trial.selectionLimit = await page.evaluate(() => {
+            const buttons = [...document.querySelectorAll(".optionButton")];
+            const instruction = [...document.querySelectorAll(".questionLabel")]
+              .map((node) => node.textContent?.trim() ?? "")
+              .find((text) => text.startsWith("Select exactly")) ?? "";
+            return {
+              instruction,
+              selectedCount: buttons.filter((button) => button.getAttribute("aria-checked") === "true").length,
+              disabledUnselectedCount: buttons.filter((button) => button.hasAttribute("disabled") && button.getAttribute("aria-checked") !== "true").length,
+            };
+          });
+          const selectedButton = await page.$('.optionButton[aria-checked="true"]');
+          if (selectedButton) await selectedButton.click();
+          trial.selectionLimit.reenabledAfterDeselect = await page.evaluate(() =>
+            [...document.querySelectorAll(".optionButton")]
+              .filter((button) => button.getAttribute("aria-checked") !== "true")
+              .every((button) => !button.hasAttribute("disabled")),
+          );
+        }
         findings.push({ viewport: viewport.name, route: `${route}#trial`, trial });
         if (viewport.name === "desktop") {
           for (let index = 0; index < 5; index += 1) {

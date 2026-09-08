@@ -89,3 +89,14 @@ Short tests were not relabelled as full simulations merely to make the dashboard
 4. Confirm the dashboard recommendations for each profile with a qualified PMP/CAPM content reviewer.
 5. Re-run the authenticated journey and, when payment testing resumes, ToyyibPay sandbox/live acceptance separately.
 
+## Follow-up correction: multiple-response selection limits
+
+Multiple-response questions now derive their required selection count from the configured answer key without exposing the answer key to the learner. For example, a key containing two choices permits exactly two selections; a key containing three choices permits exactly three.
+
+- The instruction states `Select exactly N answers.`
+- Once the limit is reached, remaining unselected choices are disabled.
+- Selected choices remain enabled so the learner can deselect and replace an answer.
+- The same rule is used by the free preview, normal simulator, and training mode.
+- The public payload contains only `requiredSelectionCount`; it does not contain the correct choices or explanation.
+- Desktop and mobile browser regression checks passed for a five-option question requiring three selections: selection stopped at three, two choices were disabled, and all choices became available after deselection.
+- Automated coverage verifies both two-answer and three-answer keys.

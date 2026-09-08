@@ -4,7 +4,7 @@ import type { RowDataPacket } from "mysql2";
 import type { PoolConnection } from "mysql2/promise";
 import { performance } from "node:perf_hooks";
 import { z } from "zod";
-import { answersMatch } from "../scoring.js";
+import { answersMatch, requiredAnswerSelectionCount } from "../scoring.js";
 import { env } from "../config.js";
 import { getPool } from "../db.js";
 import { sampleQuestions } from "../fixtures.js";
@@ -128,6 +128,10 @@ function transformQuestionRows(
 ) {
   return seededShuffle(rows, attemptId).map((row) => ({
     ...row,
+    requiredSelectionCount: Number(
+      row.requiredSelectionCount
+      ?? requiredAnswerSelectionCount(String(row.questionType), row.correctAnswer as string | null | undefined),
+    ),
     options: buildShuffledOptions(row, `${attemptId}:${row.id}`),
   }));
 }
@@ -593,7 +597,10 @@ router.get("/attempts/:id/questions", async (request, response, next) => {
       cacheStatus = "snapshot";
       rows = includeTrainingFields
         ? snapshotRows
-        : snapshotRows.map(({ correctAnswer: _correctAnswer, explanation: _explanation, ecoDomain: _ecoDomain, performanceDomain: _performanceDomain, ...row }) => row as RowDataPacket);
+        : snapshotRows.map(({ correctAnswer, explanation: _explanation, ecoDomain: _ecoDomain, performanceDomain: _performanceDomain, ...row }) => ({
+            ...row,
+            requiredSelectionCount: requiredAnswerSelectionCount(String(row.questionType), correctAnswer as string | null | undefined),
+          }) as RowDataPacket);
     } else if (includeTrainingFields) {
       cacheStatus = "training-bypass";
       rows = await queryQuestionRows(Number(attempt.examId), true, timing);

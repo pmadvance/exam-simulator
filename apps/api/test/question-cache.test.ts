@@ -3,9 +3,10 @@ import test from "node:test";
 
 import { AsyncResourceCache, publicQuestionSql } from "../src/services/question-cache.js";
 
-test("public question SQL excludes training-only fields", () => {
-  assert.doesNotMatch(publicQuestionSql, /correct_answer/i);
+test("public question SQL exposes only answer cardinality, not the answer key", () => {
+  assert.doesNotMatch(publicQuestionSql, /correct_answer\s+AS\s+correctAnswer/i);
   assert.doesNotMatch(publicQuestionSql, /explanation/i);
+  assert.match(publicQuestionSql, /AS requiredSelectionCount/i);
 });
 
 test("caches a loaded value", async () => {

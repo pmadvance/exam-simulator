@@ -96,7 +96,10 @@ export const publishedQuestionCache = new AsyncResourceCache<number, RowDataPack
 export const publicQuestionSql = `
   SELECT id, question_type AS questionType, prompt,
          option_a AS optionA, option_b AS optionB, option_c AS optionC,
-         option_d AS optionD, option_e AS optionE, image_url AS imageUrl
+         option_d AS optionD, option_e AS optionE, image_url AS imageUrl,
+         CASE WHEN question_type = 'multiple_response'
+              THEN 1 + LENGTH(correct_answer) - LENGTH(REPLACE(correct_answer, ',', ''))
+              ELSE 1 END AS requiredSelectionCount
   FROM questions
   WHERE exam_id = ? AND status = 'published'
   ORDER BY id ASC`;

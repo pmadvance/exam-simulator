@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { isValidPassword, passwordSchema, PASSWORD_REQUIREMENT_MESSAGE } from "../src/password-policy.js";
-import { answersMatch, normalizeAnswer } from "../src/scoring.js";
+import { answerSelectionCount, answersMatch, normalizeAnswer, requiredAnswerSelectionCount } from "../src/scoring.js";
 import { guestCheckoutSchema, registerSchema } from "../src/schemas.js";
 
 test("one password policy is enforced by registration and checkout", () => {
@@ -22,4 +22,12 @@ test("multiple-response scoring ignores option order and whitespace", () => {
   assert.equal(normalizeAnswer(" C, a ,B "), "A,B,C");
   assert.equal(answersMatch("C,A,B", "A,B,C"), true);
   assert.equal(answersMatch("A,B", "A,B,C"), false);
+});
+
+test("selection limits are derived from the configured answer key", () => {
+  assert.equal(answerSelectionCount("A,C"), 2);
+  assert.equal(answerSelectionCount(" C, A, E "), 3);
+  assert.equal(requiredAnswerSelectionCount("multiple_response", "A,C"), 2);
+  assert.equal(requiredAnswerSelectionCount("multiple_response", "A,C,E"), 3);
+  assert.equal(requiredAnswerSelectionCount("single_choice", "A,C"), 1);
 });

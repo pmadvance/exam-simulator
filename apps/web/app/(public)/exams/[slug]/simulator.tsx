@@ -23,6 +23,7 @@ type SimulatorProps = {
 type FullQuestion = {
   id: number;
   questionType?: "single_choice" | "multiple_response" | "true_false";
+  requiredSelectionCount?: number;
   prompt: string;
   optionA: string;
   optionB: string;
@@ -52,6 +53,20 @@ function getQuestionOptions(question: FullQuestion) {
       return text ? { originalKey: key, displayLabel: key, text } : null;
     })
     .filter(Boolean) as Array<{ originalKey: string; displayLabel: string; text: string }>;
+}
+
+function getRequiredSelectionCount(question: Pick<FullQuestion, "questionType" | "requiredSelectionCount">) {
+  if (question.questionType !== "multiple_response") return 1;
+  const count = Number(question.requiredSelectionCount ?? 1);
+  return Number.isSafeInteger(count) && count > 0 ? count : 1;
+}
+
+function hasRequiredSelections(
+  question: Pick<FullQuestion, "questionType" | "requiredSelectionCount">,
+  answer: string | null | undefined,
+) {
+  const selectedCount = String(answer ?? "").split(",").filter(Boolean).length;
+  return selectedCount === getRequiredSelectionCount(question);
 }
 
 export function Simulator({ slug, title, timeLimitMinutes, questionCount, productSlug, previewQuestion, trialQuestions }: SimulatorProps) {
@@ -392,7 +407,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
         if (idx >= 0) { 
           // Unselect if already selected
           selected.splice(idx, 1); 
-        } else {
+        } else if (selected.length < getRequiredSelectionCount(questions[currentIndex])) {
           selected.push(option); 
           selected.sort(); 
         }
@@ -421,8 +436,10 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
   }
 
   function submitTrainingAnswer(questionId: string) {
-    if (!answers[questionId]) {
-      setStatusMessage("Select an answer before submitting.");
+    const question = questions.find((candidate) => String(candidate.id) === questionId);
+    if (!question || !hasRequiredSelections(question, answers[questionId])) {
+      const requiredCount = question ? getRequiredSelectionCount(question) : 1;
+      setStatusMessage(`Select exactly ${requiredCount} answer${requiredCount === 1 ? "" : "s"} before submitting.`);
       return;
     }
     setSubmittedTrainingAnswers((prev) => new Set(prev).add(questionId));
@@ -657,6 +674,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
     const activeTrainingMode = Boolean(attempt.trainingMode);
     const selectedAnswer = answers[qid];
     const trainingAnswerSubmitted = submittedTrainingAnswers.has(qid);
+    const hasCompleteSelection = hasRequiredSelections(currentQuestion, selectedAnswer);
     const showTrainingFeedback = activeTrainingMode && trainingAnswerSubmitted && Boolean(selectedAnswer) && Boolean(currentQuestion.correctAnswer);
 
     return (
@@ -730,7 +748,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
             <span>Swipe to navigate</span>
           </div>
           {currentQuestion.questionType !== "single_choice" && (
-            <p className="questionLabel">{currentQuestion.questionType === "multiple_response" ? "Select all that apply" : "True/False"}</p>
+            <p className="questionLabel">{currentQuestion.questionType === "multiple_response" ? `Select exactly ${getRequiredSelectionCount(currentQuestion)} answers.` : "True/False"}</p>
           )}
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
             <h2
@@ -763,6 +781,9 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
             {getQuestionOptions(currentQuestion).map((option) => {
               const selectedParts = (answers[qid] ?? "").split(",").filter(Boolean);
               const isSelected = currentQuestion.questionType === "multiple_response" ? selectedParts.includes(option.originalKey) : answers[qid] === option.originalKey;
+              const selectionLimitReached = currentQuestion.questionType === "multiple_response"
+                && !isSelected
+                && selectedParts.length >= getRequiredSelectionCount(currentQuestion);
               const isStruck = qStrikethroughs.has(option.originalKey);
               const isHighlighted = qOptionHighlights.has(option.originalKey);
               return (
@@ -771,7 +792,9 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
                     className={isSelected ? "optionButton active" : "optionButton"}
                     onClick={() => selectAnswer(qid, option.originalKey)}
                     type="button"
-                    disabled={activeTrainingMode && trainingAnswerSubmitted}
+                    disabled={(activeTrainingMode && trainingAnswerSubmitted) || selectionLimitReached}
+                    role={currentQuestion.questionType === "multiple_response" ? "checkbox" : "radio"}
+                    aria-checked={isSelected}
                     style={{
                       textDecoration: isStruck ? "line-through" : "none",
                       opacity: isStruck ? 0.5 : 1,
@@ -805,7 +828,7 @@ export function Simulator({ slug, title, timeLimitMinutes, questionCount, produc
 
           {activeTrainingMode && !trainingAnswerSubmitted && (
             <div className="simulatorActions" style={{ marginTop: 12, justifyContent: "flex-start" }}>
-              <button className="cta buttonCta" type="button" onClick={() => submitTrainingAnswer(qid)} disabled={!selectedAnswer}>
+              <button className="cta buttonCta" type="button" onClick={() => submitTrainingAnswer(qid)} disabled={!hasCompleteSelection}>
                 Submit Answer
               </button>
             </div>
@@ -1112,7 +1135,11 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
       const current = prev[trialIndex];
       if (q.questionType === "multiple_response") {
         const selectedOptions = new Set((current ?? "").split(",").filter(Boolean));
-        if (selectedOptions.has(option)) selectedOptions.delete(option); else selectedOptions.add(option);
+        if (selectedOptions.has(option)) {
+          selectedOptions.delete(option);
+        } else if (selectedOptions.size < getRequiredSelectionCount(q)) {
+          selectedOptions.add(option);
+        }
         const next = { ...prev };
         if (selectedOptions.size === 0) delete next[trialIndex];
         else next[trialIndex] = [...selectedOptions].sort().join(",");
@@ -1153,8 +1180,9 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
   }
 
   async function submitTrialAnswer() {
-    if (!selected) {
-      setStatusMessage("Select an answer before submitting.");
+    if (!hasRequiredSelections(q, selected)) {
+      const requiredCount = getRequiredSelectionCount(q);
+      setStatusMessage(`Select exactly ${requiredCount} answer${requiredCount === 1 ? "" : "s"} before submitting.`);
       return;
     }
     setGrading(true);
@@ -1534,7 +1562,7 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
             Highlight
           </button>
         </div>
-        {q.questionType === "multiple_response" ? <p className="questionLabel">Select all answers that apply.</p> : null}
+        {q.questionType === "multiple_response" ? <p className="questionLabel">Select exactly {getRequiredSelectionCount(q)} answers.</p> : null}
 
         {q.imageUrl && (
           <div style={{ margin: "12px 0" }}>
@@ -1549,6 +1577,10 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
         <div className="optionList" role={q.questionType === "multiple_response" ? "group" : "radiogroup"} aria-label="Answer choices">
           {Object.entries(q.options).map(([key, value]) => {
             const isSelected = (trialAnswers[trialIndex] ?? "").split(",").includes(key);
+            const selectedCount = (trialAnswers[trialIndex] ?? "").split(",").filter(Boolean).length;
+            const selectionLimitReached = q.questionType === "multiple_response"
+              && !isSelected
+              && selectedCount >= getRequiredSelectionCount(q);
             const isStruck = qStrikethroughs.has(key);
             const isHighlighted = qOptionHighlights.has(key);
 
@@ -1567,7 +1599,7 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
                   className={className}
                   type="button"
                   onClick={() => selectTrialAnswer(key)}
-                  disabled={trainingMode && revealedAnswer}
+                  disabled={(trainingMode && revealedAnswer) || selectionLimitReached}
                   role={q.questionType === "multiple_response" ? "checkbox" : "radio"}
                   aria-checked={isSelected}
                   style={{
@@ -1602,7 +1634,7 @@ function TrialSimulator({ trialQuestions, examSlug, productSlug, title, timeLimi
 
         {trainingMode && !revealedAnswer && (
           <div className="simulatorActions" style={{ marginTop: 12, justifyContent: "flex-start" }}>
-            <button className="cta buttonCta" type="button" onClick={() => { void submitTrialAnswer(); }} disabled={!selected || grading}>
+            <button className="cta buttonCta" type="button" onClick={() => { void submitTrialAnswer(); }} disabled={!hasRequiredSelections(q, selected) || grading}>
               {grading ? "Checking…" : "Submit Answer"}
             </button>
           </div>

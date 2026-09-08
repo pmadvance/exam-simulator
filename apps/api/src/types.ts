@@ -47,6 +47,7 @@ export type QuestionPreviewRow = RowDataPacket & {
   optionE: string;
   explanation: string;
   correctAnswer: string;
+  requiredSelectionCount?: number;
 };
 
 export type AttemptRow = RowDataPacket & {

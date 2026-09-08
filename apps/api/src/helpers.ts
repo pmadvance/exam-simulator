@@ -449,7 +449,10 @@ export async function getExamBySlug(slug: string) {
 
   const [questionRows] = await getPool().query(
     `SELECT id, question_type AS questionType, prompt, option_a AS optionA, option_b AS optionB,
-            option_c AS optionC, option_d AS optionD, option_e AS optionE, image_url AS imageUrl
+            option_c AS optionC, option_d AS optionD, option_e AS optionE, image_url AS imageUrl,
+            CASE WHEN question_type = 'multiple_response'
+                 THEN 1 + LENGTH(correct_answer) - LENGTH(REPLACE(correct_answer, ',', ''))
+                 ELSE 1 END AS requiredSelectionCount
      FROM questions
      WHERE exam_id = ? AND status = 'published'
      ORDER BY CASE WHEN id = (
@@ -465,6 +468,7 @@ export async function getExamBySlug(slug: string) {
   const trialQuestions = questions.map((q) => ({
     id: q.id,
     questionType: q.questionType,
+    requiredSelectionCount: Number(q.requiredSelectionCount ?? 1),
     prompt: q.prompt,
     options: Object.fromEntries(
       (["A", "B", "C", "D", "E"] as const)

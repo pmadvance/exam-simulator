@@ -53,3 +53,6 @@ For the strongest client demonstration, complete those classifications, add at l
 
 ToyyibPay/payment testing remains deferred as requested. A final signed-in production journey should be repeated with a controlled QA learner and test enrollment once the demonstration content is ready.
 
+## Follow-up simulator improvement
+
+Multiple-response questions now tell the learner exactly how many answers to choose and prevent additional selections once that number is reached. The limit comes from the configured answer key, so questions requiring two and three answers behave correctly. Learners can deselect an answer and choose a replacement. The answer key itself remains private.
